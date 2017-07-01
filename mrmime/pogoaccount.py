@@ -312,15 +312,6 @@ class POGOAccount(object):
                                          gym_lat_degrees=gym_lat,
                                          gym_lng_degrees=gym_lng))
 
-    def req_get_gym_details(self, gym_id, gym_lat, gym_lng, player_lat, player_lng):
-        return self.perform_request(
-            lambda req: req.get_gym_details(gym_id=gym_id,
-                                            player_latitude=f2i(player_lat),
-                                            player_longitude=f2i(player_lng),
-                                            gym_latitude=gym_lat,
-                                            gym_longitude=gym_lng,
-                                            client_version=API_VERSION))
-
     def req_recycle_inventory_item(self, item_id, amount):
         return self.perform_request(lambda req: req.recycle_inventory_item(
             item_id=item_id,
