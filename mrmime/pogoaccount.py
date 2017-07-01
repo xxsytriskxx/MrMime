@@ -278,7 +278,7 @@ class POGOAccount(object):
             encounter_id=encounter_id,
             spawn_point_id=spawn_point_id,
             player_latitude=latitude,
-            player_longitude=longitude), get_inbox=True)
+            player_longitude=longitude))
 
     def req_catch_pokemon(self, encounter_id, spawn_point_id, ball,
                           normalized_reticle_size, spin_modifier):
@@ -289,11 +289,11 @@ class POGOAccount(object):
                 spawn_point_id=spawn_point_id,
                 hit_pokemon=1,
                 spin_modifier=spin_modifier,
-                normalized_hit_position=1.0), get_inbox=True)
+                normalized_hit_position=1.0))
 
     def req_release_pokemon(self, pokemon_id):
         return self.perform_request(
-            lambda req: req.release_pokemon(pokemon_id=pokemon_id), get_inbox=True)
+            lambda req: req.release_pokemon(pokemon_id=pokemon_id))
 
     def req_fort_search(self, fort_id, fort_lat, fort_lng, player_lat,
                         player_lng):
@@ -302,7 +302,7 @@ class POGOAccount(object):
             fort_latitude=fort_lat,
             fort_longitude=fort_lng,
             player_latitude=player_lat,
-            player_longitude=player_lng), get_inbox=True)
+            player_longitude=player_lng))
 
     def req_gym_get_info(self, gym_id, gym_lat, gym_lng, player_lat, player_lng):
         return self.perform_request(
@@ -319,16 +319,16 @@ class POGOAccount(object):
                                             player_longitude=f2i(player_lng),
                                             gym_latitude=gym_lat,
                                             gym_longitude=gym_lng,
-                                            client_version=API_VERSION), get_inbox=True)
+                                            client_version=API_VERSION))
 
     def req_recycle_inventory_item(self, item_id, amount):
         return self.perform_request(lambda req: req.recycle_inventory_item(
             item_id=item_id,
-            count=amount), get_inbox=True)
+            count=amount))
 
     def req_level_up_rewards(self, level):
         return self.perform_request(
-            lambda req: req.level_up_rewards(level=level), get_inbox=True)
+            lambda req: req.level_up_rewards(level=level))
 
     def req_verify_challenge(self, captcha_token):
         req = self._api.create_request()
