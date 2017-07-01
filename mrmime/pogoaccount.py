@@ -304,6 +304,14 @@ class POGOAccount(object):
             player_latitude=player_lat,
             player_longitude=player_lng), get_inbox=True)
 
+    def req_gym_get_info(self, gym_id, gym_lat, gym_lng, player_lat, player_lng):
+        return self.perform_request(
+            lambda req: req.gym_get_info(gym_id=gym_id,
+                                         player_lat_degrees=f2i(player_lat),
+                                         player_lng_degrees=f2i(player_lng),
+                                         gym_lat_degrees=gym_lat,
+                                         gym_lng_degrees=gym_lng))
+
     def req_get_gym_details(self, gym_id, gym_lat, gym_lng, player_lat, player_lng):
         return self.perform_request(
             lambda req: req.get_gym_details(gym_id=gym_id,
