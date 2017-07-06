@@ -278,7 +278,7 @@ class POGOAccount(object):
             encounter_id=encounter_id,
             spawn_point_id=spawn_point_id,
             player_latitude=latitude,
-            player_longitude=longitude))
+            player_longitude=longitude), action=2.25)
 
     def req_catch_pokemon(self, encounter_id, spawn_point_id, ball,
                           normalized_reticle_size, spin_modifier):
@@ -289,11 +289,16 @@ class POGOAccount(object):
                 spawn_point_id=spawn_point_id,
                 hit_pokemon=1,
                 spin_modifier=spin_modifier,
-                normalized_hit_position=1.0))
+                normalized_hit_position=1.0), action=6)
 
     def req_release_pokemon(self, pokemon_id):
         return self.perform_request(
             lambda req: req.release_pokemon(pokemon_id=pokemon_id))
+
+    def req_fort_details(self, fort_id, fort_lat, fort_lng):
+        return self.perform_request(lambda req: req.fort_details(fort_id=fort_id,
+                                                                 latitude=fort_lat,
+                                                                 longitude=fort_lng), action=1.2)
 
     def req_fort_search(self, fort_id, fort_lat, fort_lng, player_lat,
                         player_lng):
@@ -302,7 +307,13 @@ class POGOAccount(object):
             fort_latitude=fort_lat,
             fort_longitude=fort_lng,
             player_latitude=player_lat,
-            player_longitude=player_lng))
+            player_longitude=player_lng), action=2)
+
+    def seq_spin_pokestop(self, fort_id, fort_lat, fort_lng, player_lat,
+                          player_lng):
+        self.req_fort_details(fort_id, fort_lat, fort_lng)
+#        name = responses['FORT_DETAILS'].name
+        return self.req_fort_search(fort_id, fort_lat, fort_lng, player_lat, player_lng)
 
     def req_gym_get_info(self, gym_id, gym_lat, gym_lng, player_lat, player_lng):
         return self.perform_request(
@@ -315,16 +326,14 @@ class POGOAccount(object):
     def req_recycle_inventory_item(self, item_id, amount):
         return self.perform_request(lambda req: req.recycle_inventory_item(
             item_id=item_id,
-            count=amount))
+            count=amount), action=2)
 
     def req_level_up_rewards(self, level):
         return self.perform_request(
             lambda req: req.level_up_rewards(level=level))
 
     def req_verify_challenge(self, captcha_token):
-        req = self._api.create_request()
-        req.verify_challenge(token=captcha_token)
-        responses = self._call_request(req)
+        responses = self.perform_request(lambda req: req.verify_challenge(token=captcha_token), action=4)
         if 'VERIFY_CHALLENGE' in responses:
             response = responses['VERIFY_CHALLENGE']
             if 'success' in response:
