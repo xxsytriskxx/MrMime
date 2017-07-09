@@ -12,7 +12,7 @@ from pgoapi.utilities import get_cell_ids, f2i
 
 from mrmime import _mr_mime_cfg, APP_VERSION, avatar, API_VERSION
 from mrmime.cyclicresourceprovider import CyclicResourceProvider
-from mrmime.responses import parse_inventory_delta, parse_player_stats
+from mrmime.responses import parse_inventory_delta, parse_player_stats, parse_caught_pokemon
 from mrmime.utils import jitter_location
 
 log = logging.getLogger(__name__)
@@ -282,7 +282,7 @@ class POGOAccount(object):
 
     def req_catch_pokemon(self, encounter_id, spawn_point_id, ball,
                           normalized_reticle_size, spin_modifier):
-        return self.perform_request(lambda req: req.catch_pokemon(
+        response = self.perform_request(lambda req: req.catch_pokemon(
                 encounter_id=encounter_id,
                 pokeball=ball,
                 normalized_reticle_size=normalized_reticle_size,
@@ -290,6 +290,8 @@ class POGOAccount(object):
                 hit_pokemon=1,
                 spin_modifier=spin_modifier,
                 normalized_hit_position=1.0), action=6)
+        self.last_caught_pokemon = parse_caught_pokemon(response)
+        return response
 
     def req_release_pokemon(self, pokemon_id):
         return self.perform_request(
@@ -499,9 +501,6 @@ class POGOAccount(object):
                 # Update last timestamp for inventory requests
                 self._last_timestamp_ms = api_inventory[
                     'inventory_delta'].get('new_timestamp_ms', 0)
-
-                # Cleanup
-                del responses[response_type]
 
             # Get settings hash from response for future calls
             elif response_type == 'DOWNLOAD_SETTINGS':

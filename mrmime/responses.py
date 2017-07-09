@@ -37,3 +37,19 @@ def parse_player_stats(resp_get_inventory):
         if 'player_stats' in item_data:
             return item_data['player_stats']
     return {}
+
+
+def parse_caught_pokemon(catch_result):
+    if ('CATCH_POKEMON' in catch_result):
+        catch_pokemon = catch_result['CATCH_POKEMON']
+        catch_status = catch_pokemon['status']
+        if catch_status == 1:
+            # Check inventory for caught Pokemon
+            capture_id = catch_pokemon['captured_pokemon_id']
+            iitems = catch_result['GET_INVENTORY']['inventory_delta'][
+                'inventory_items']
+            for item in iitems:
+                iidata = item['inventory_item_data']
+                if 'pokemon_data' in iidata and iidata['pokemon_data']['id'] == capture_id:
+                    return iidata['pokemon_data']
+    return None
