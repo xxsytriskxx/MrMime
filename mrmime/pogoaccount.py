@@ -521,7 +521,7 @@ class POGOAccount(object):
             # Check for captcha
             elif response_type == 'CHECK_CHALLENGE':
                 self.captcha_url = response.get('challenge_url')
-                if self.has_captcha():
+                if self.has_captcha() and self.cfg['exception_on_captcha']:
                     raise CaptchaException
 
     def _initial_login_request_flow(self):

@@ -24,6 +24,7 @@ _mr_mime_cfg = {
     'parallel_logins': True,            # Parallel logins increases number of requests.
     'retry_on_hash_quota_exceeded': True,     # DEPRECATED, use retry_on_hashing_error below!
     'retry_on_hashing_error': True,     # Retry requests on recoverable hash server errors (offline, timeout, quota exceeded)
+    'exception_on_captcha': True,       # Raise CaptchaException if captcha detected
     # --- account login specific
     'login_retries': 3,                 # Number of login retries
     'login_delay': 6,                   # Delay between login retries
