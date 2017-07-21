@@ -10,7 +10,7 @@ from pgoapi.exceptions import AuthException, PgoapiError, \
 from pgoapi.protos.pogoprotos.inventory.item.item_id_pb2 import *
 from pgoapi.utilities import get_cell_ids, f2i
 
-from mrmime import _mr_mime_cfg, APP_VERSION, avatar, API_VERSION
+from mrmime import _mr_mime_cfg, avatar
 from mrmime.cyclicresourceprovider import CyclicResourceProvider
 from mrmime.responses import parse_inventory_delta, parse_player_stats, parse_caught_pokemon
 from mrmime.utils import jitter_location
@@ -717,7 +717,7 @@ class POGOAccount(object):
         # ===== DOWNLOAD_REMOTE_CONFIG_VERSION
         responses = self.perform_request(
             lambda req: req.download_remote_config_version(platform=1,
-                                                           app_version=APP_VERSION),
+                                                           app_version=PGoApi.get_api_version()),
             download_settings=True, buddy_walked=False, get_inbox=False)
         if 'DOWNLOAD_REMOTE_CONFIG_VERSION' not in responses:
             raise Exception("Call to download_remote_config_version did not"
@@ -735,7 +735,7 @@ class POGOAccount(object):
             # ===== GET_ASSET_DIGEST
             responses = self.perform_request(lambda req: req.get_asset_digest(
                 platform=1,
-                app_version=APP_VERSION,
+                app_version=PGoApi.get_api_version(),
                 paginate=True,
                 page_offset=page_offset,
                 page_timestamp=page_timestamp), download_settings=True, buddy_walked=False, get_inbox=False)
