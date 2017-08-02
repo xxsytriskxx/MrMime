@@ -3,9 +3,13 @@ import json
 import logging
 import os
 
+from pgoapi.hash_server import HashServer
+
 log = logging.getLogger(__name__)
 
 DEFAULT_CONFIG_FILE = 'mrmime_config.json'
+
+GOMAN_HASHING_ENDPOINT = 'http://hash.goman.io/api/v137_1/hash'
 
 
 _mr_mime_cfg = {
@@ -16,6 +20,7 @@ _mr_mime_cfg = {
         'timezone': 'America/Denver'
     },
     # --- general
+    'goman_hashing': False,             # Use GoMan hashing instead of Bossland
     'parallel_logins': True,            # Parallel logins increases number of requests.
     'retry_on_hash_quota_exceeded': True,     # DEPRECATED, use retry_on_hashing_error below!
     'retry_on_hashing_error': True,     # Retry requests on recoverable hash server errors (offline, timeout, quota exceeded)
@@ -59,3 +64,7 @@ def init_mr_mime(user_cfg=None, config_file=DEFAULT_CONFIG_FILE):
         file_handler.setFormatter(
             logging.Formatter('%(asctime)s [%(levelname)8s] %(message)s'))
         logging.getLogger('mrmime').addHandler(file_handler)
+
+    if _mr_mime_cfg['goman_hashing']:
+        HashServer.__dict__['endpoint'] = GOMAN_HASHING_ENDPOINT
+        log.info("Using GoMan hashing instead of Bossland hashing.")
