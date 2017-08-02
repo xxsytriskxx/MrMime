@@ -21,6 +21,7 @@ _mr_mime_cfg = {
     },
     # --- general
     'goman_hashing': False,             # Use GoMan hashing instead of Bossland
+    'goman_hashing_rate_limit': None,   # Artificial rate limiting for GoMan hashing. Needs goman_hashing to be enabled.
     'parallel_logins': True,            # Parallel logins increases number of requests.
     'retry_on_hash_quota_exceeded': True,     # DEPRECATED, use retry_on_hashing_error below!
     'retry_on_hashing_error': True,     # Retry requests on recoverable hash server errors (offline, timeout, quota exceeded)
@@ -39,6 +40,15 @@ _mr_mime_cfg = {
 
 
 # ---------------------------------------------------------------------------
+
+# Remember the original __init__ function because it gets replaced when using GoMan hashing with rate limit
+__HashServer_init = HashServer.__init__
+
+
+# New HashServer init function for GoMan hashing with rate limit
+def goman_hashing_hashserver_init(self, token):
+    __HashServer_init(self, token)
+    self.headers['X-RateLimit'] = _mr_mime_cfg['goman_hashing_rate_limit']
 
 
 def init_mr_mime(user_cfg=None, config_file=DEFAULT_CONFIG_FILE):
@@ -68,3 +78,7 @@ def init_mr_mime(user_cfg=None, config_file=DEFAULT_CONFIG_FILE):
     if _mr_mime_cfg['goman_hashing']:
         HashServer.__dict__['endpoint'] = GOMAN_HASHING_ENDPOINT
         log.info("Using GoMan hashing instead of Bossland hashing.")
+        if _mr_mime_cfg['goman_hashing_rate_limit']:
+            HashServer.__init__ = goman_hashing_hashserver_init
+            log.info("Configured artificial GoMan hashing rate limit of {} RPM.".format(
+                _mr_mime_cfg['goman_hashing_rate_limit']))
