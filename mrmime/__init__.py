@@ -22,8 +22,9 @@ _mr_mime_cfg = {
     # --- general
     'goman_hashing': False,             # Use GoMan hashing instead of Bossland
     'goman_hashing_rate_limit': None,   # Artificial rate limiting for GoMan hashing. Needs goman_hashing to be enabled.
+    'goman_hashing_max_rpm_count': None,    # Artificial remaining RPM for GoMan hashing.
     'parallel_logins': True,            # Parallel logins increases number of requests.
-    'retry_on_hash_quota_exceeded': True,     # DEPRECATED, use retry_on_hashing_error below!
+    'retry_on_hash_quota_exceeded': True,   # DEPRECATED, use retry_on_hashing_error below!
     'retry_on_hashing_error': True,     # Retry requests on recoverable hash server errors (offline, timeout, quota exceeded)
     'exception_on_captcha': True,       # Raise CaptchaException if captcha detected
     # --- account login specific
@@ -45,10 +46,15 @@ _mr_mime_cfg = {
 __HashServer_init = HashServer.__init__
 
 
-# New HashServer init function for GoMan hashing with rate limit
+# New HashServer init function for GoMan hashing
 def goman_hashing_hashserver_init(self, token):
     __HashServer_init(self, token)
-    self.headers['X-RateLimit'] = _mr_mime_cfg['goman_hashing_rate_limit']
+    # Optionally configure artificial rate limit
+    if _mr_mime_cfg['goman_hashing_rate_limit']:
+        self.headers['X-RateLimit'] = _mr_mime_cfg['goman_hashing_rate_limit']
+    # Optionally configure artificial max RPM count
+    if _mr_mime_cfg['goman_hashing_max_rpm_count']:
+        self.headers['X-MaxRPMCount'] = _mr_mime_cfg['goman_hashing_max_rpm_count']
 
 
 def init_mr_mime(user_cfg=None, config_file=DEFAULT_CONFIG_FILE):
@@ -76,9 +82,13 @@ def init_mr_mime(user_cfg=None, config_file=DEFAULT_CONFIG_FILE):
         logging.getLogger('mrmime').addHandler(file_handler)
 
     if _mr_mime_cfg['goman_hashing']:
+        # Inject GoMan hashing into pgoapi
         HashServer.__dict__['endpoint'] = GOMAN_HASHING_ENDPOINT
+        HashServer.__init__ = goman_hashing_hashserver_init
         log.info("Using GoMan hashing instead of Bossland hashing.")
         if _mr_mime_cfg['goman_hashing_rate_limit']:
-            HashServer.__init__ = goman_hashing_hashserver_init
-            log.info("Configured artificial GoMan hashing rate limit of {} RPM.".format(
+            log.info("Using artificial GoMan hashing rate limit of {} RPM.".format(
                 _mr_mime_cfg['goman_hashing_rate_limit']))
+        if _mr_mime_cfg['goman_hashing_max_rpm_count']:
+            log.info("Using artificial GoMan hashing max RPM count of {} RPM.".format(
+                _mr_mime_cfg['goman_hashing_max_rpm_count']))
