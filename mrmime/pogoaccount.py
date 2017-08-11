@@ -3,12 +3,14 @@ import json
 import logging
 import random
 import time
+import traceback
 from threading import Lock
 
 import requests
 from pgoapi import PGoApi
 from pgoapi.exceptions import AuthException, PgoapiError, \
-    BannedAccountException, HashingQuotaExceededException, HashingOfflineException, HashingTimeoutException
+    BannedAccountException, HashingQuotaExceededException, HashingOfflineException, HashingTimeoutException, \
+    NoHashKeyException
 from pgoapi.protos.pogoprotos.inventory.item.item_id_pb2 import *
 from pgoapi.utilities import get_cell_ids, f2i
 
@@ -56,6 +58,7 @@ class POGOAccount(object):
         self.captcha_url = None
 
         # Inventory information
+        self.inbox = {}
         self.inventory = None
         self.inventory_balls = 0
         self.inventory_total = 0
@@ -279,6 +282,7 @@ class POGOAccount(object):
             'username': self.username,
             'password': self.password,
             'auth_service': self.auth_service,
+            'email': self.inbox.get('EMAIL'),
             'system_id': self.cfg['pgpool_system_id'],
             'latitude': self.latitude,
             'longitude': self.longitude,
@@ -289,9 +293,9 @@ class POGOAccount(object):
             'captures': self.get_stats('pokemons_captured'),
             'spins': self.get_stats('poke_stop_visits'),
             'walked': self.get_stats('km_walked'),
-            # 'team': data.get('team'),
-            # 'coins': data.get('coins'),
-            # 'stardust': data.get('stardust'),
+            'team': self.inbox.get('TEAM'),
+            'coins': self.inbox.get('POKECOIN_BALANCE'),
+            'stardust': self.inbox.get('STARDUST_BALANCE'),
             'warn': self.is_warned(),
             'banned': self.is_banned(),
             'ban_flag': self.get_state('banned'),
@@ -301,7 +305,9 @@ class POGOAccount(object):
             'rareless_scans': self.rareless_scans,
             'balls': self.inventory_balls,
             'total_items': self.inventory_total,
-            'pokemon': len(self.pokemon)
+            'pokemon': len(self.pokemon),
+            'eggs': len(self.eggs),
+            'incubators': len(self.incubators)
             #'awarded_to_level': data.get('awarded_to_level')
         }]
         try:
@@ -367,7 +373,7 @@ class POGOAccount(object):
             self.last_caught_pokemon = None
             if catch_status == 1:
                 if capture_id in self.pokemon:
-                    self.last_caught_pokemon = parse_caught_pokemon(response)
+                    self.last_caught_pokemon = self.pokemon[capture_id]
 
         return response
 
@@ -508,6 +514,11 @@ class POGOAccount(object):
         while not success:
             try:
                 # Set hash key for this request
+                if not self._hash_key_provider:
+                    msg = "No hash key configured!"
+                    self.log_error(msg)
+                    raise NoHashKeyException()
+
                 old_hash_key = self._hash_key
                 self._hash_key = self._hash_key_provider.next()
                 if self._hash_key != old_hash_key:
@@ -581,7 +592,12 @@ class POGOAccount(object):
     def _parse_responses(self, responses):
         for response_type in responses.keys():
             response = responses[response_type]
-            if response_type == 'GET_INVENTORY':
+
+            if response_type == 'GET_INBOX':
+                self._parse_inbox_response(response)
+                del responses[response_type]
+
+            elif response_type == 'GET_INVENTORY':
                 api_inventory = response
 
                 # Set an (empty) inventory if necessary
@@ -634,6 +650,16 @@ class POGOAccount(object):
             elif response_type == 'GET_MAP_OBJECTS':
                 if is_rareless_scan(response):
                     self.rareless_scans += 1
+
+    def _parse_inbox_response(self, response):
+        vars = response.inbox.builtin_variables
+        for v in vars:
+            if v.name in ('POKECOIN_BALANCE', 'STARDUST_BALANCE'):
+                self.inbox[v.name] = int(v.literal)
+            elif v.name == 'EMAIL':
+                self.inbox[v.name] = v.literal
+            elif v.name == 'TEAM':
+                self.inbox[v.name] = v.key
 
     def _parse_inventory_delta(self, inventory):
         for item in inventory.inventory_delta.inventory_items:
