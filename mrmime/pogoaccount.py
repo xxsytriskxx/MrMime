@@ -1,9 +1,11 @@
 import hashlib
+import json
 import logging
 import random
 import time
 from threading import Lock
 
+import requests
 from pgoapi import PGoApi
 from pgoapi.exceptions import AuthException, PgoapiError, \
     BannedAccountException, HashingQuotaExceededException, HashingOfflineException, HashingTimeoutException
@@ -68,6 +70,7 @@ class POGOAccount(object):
 
         # Count number of rareless scans (to detect shadowbans)
         self.rareless_scans = 0
+        self.shadowbanned = False
 
         # Last log message (for GUI/console)
         self.last_msg = ""
@@ -99,6 +102,9 @@ class POGOAccount(object):
 
         # Trainer statistics
         self._player_stats = None
+
+        # PGPool
+        self._last_pgpool_update = 0
 
     @property
     def hash_key(self):
@@ -262,6 +268,52 @@ class POGOAccount(object):
 
     def get_state(self, key, default=None):
         return self._player_state.get(key, default)
+
+    def needs_pgpool_update(self):
+        has_data = self.is_banned() or (self.inventory and self._player_stats and self._player_state)
+        return self.cfg['pgpool_auto_update'] and has_data and (
+            time.time() - self._last_pgpool_update >= self.cfg['pgpool_update_interval'])
+
+    def update_pgpool(self):
+        data = [{
+            'username': self.username,
+            'password': self.password,
+            'auth_service': self.auth_service,
+            'system_id': self.cfg['pgpool_system_id'],
+            'latitude': self.latitude,
+            'longitude': self.longitude,
+            'level': self.get_stats('level'),
+            'xp': self.get_stats('experience'),
+            'encounters': self.get_stats('pokemons_encountered'),
+            'balls_thrown': self.get_stats('pokeballs_thrown'),
+            'captures': self.get_stats('pokemons_captured'),
+            'spins': self.get_stats('poke_stop_visits'),
+            'walked': self.get_stats('km_walked'),
+            # 'team': data.get('team'),
+            # 'coins': data.get('coins'),
+            # 'stardust': data.get('stardust'),
+            'warn': self.is_warned(),
+            'banned': self.is_banned(),
+            'ban_flag': self.get_state('banned'),
+            'shadowbanned': self.shadowbanned,
+            #'tutorial_state': data.get('tutorial_state'),
+            'captcha': self.has_captcha(),
+            'rareless_scans': self.rareless_scans,
+            'balls': self.inventory_balls,
+            'total_items': self.inventory_total,
+            'pokemon': len(self.pokemon)
+            #'awarded_to_level': data.get('awarded_to_level')
+        }]
+        try:
+            url = '{}/account/update'.format(self.cfg['pgpool_url'])
+            r = requests.post(url, data=json.dumps(data))
+            if r.status_code == 200:
+                self.log_info("Successfully updated PGPool account details")
+            else:
+                self.log_warning("Got status code {} from PGPool while updating account details".format(r.status_code))
+        except:
+            self.log_debug("Could not update PGPool account details")
+        self._last_pgpool_update = time.time()
 
     def req_get_map_objects(self):
         """Scans current account location."""
@@ -504,6 +556,9 @@ class POGOAccount(object):
         responses = response['responses']
 
         self._parse_responses(responses)
+
+        if self.needs_pgpool_update():
+            self.update_pgpool()
 
         return responses
 

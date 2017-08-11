@@ -36,8 +36,19 @@ _mr_mime_cfg = {
     'scan_delay': 10,                   # Wait at least this long between 2 GMO requests
     # --- logging
     'debug_log': False,                 # If MrMime should output debug logging
-    'log_file': None                    # If given MrMime also logs into this file
+    'log_file': None,                   # If given MrMime also logs into this file
+    # --- PGPool support
+    'pgpool_url': None,                 # URL of PGPool to manage account details
+    'pgpool_system_id': None,           # System ID for PGPool - which system has the account in use
+    'pgpool_auto_update': True,         # Whether MrMime updates PGPool account details automatically
+    'pgpool_update_interval': 60        # Update account details in PGPool after this many seconds
 }
+
+# ---------------------------------------------------------------------------
+
+
+def mrmime_pgpool_enabled():
+    return _mr_mime_cfg['pgpool_url'] and _mr_mime_cfg['pgpool_system_id']
 
 
 # ---------------------------------------------------------------------------
