@@ -626,6 +626,7 @@ class POGOAccount(object):
             elif response_type == 'GET_PLAYER':
                 self._player_state = {
                     'tutorial_state': response.player_data.tutorial_state,
+                    'buddy': response.player_data.buddy_pokemon.id,
                     'warn': response.warn,
                     'banned': response.banned
                 }
