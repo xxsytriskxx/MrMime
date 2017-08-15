@@ -651,6 +651,8 @@ class POGOAccount(object):
             elif response_type == 'GET_MAP_OBJECTS':
                 if is_rareless_scan(response):
                     self.rareless_scans += 1
+                else:
+                    self.rareless_scans = 0
 
     def _parse_inbox_response(self, response):
         vars = response.inbox.builtin_variables
