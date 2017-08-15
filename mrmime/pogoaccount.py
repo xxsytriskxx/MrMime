@@ -1,18 +1,22 @@
 import hashlib
+import json
 import logging
 import random
 import time
+import traceback
 from threading import Lock
 
+import requests
 from pgoapi import PGoApi
 from pgoapi.exceptions import AuthException, PgoapiError, \
-    BannedAccountException, HashingQuotaExceededException, HashingOfflineException, HashingTimeoutException
+    BannedAccountException, HashingQuotaExceededException, HashingOfflineException, HashingTimeoutException, \
+    NoHashKeyException
 from pgoapi.protos.pogoprotos.inventory.item.item_id_pb2 import *
 from pgoapi.utilities import get_cell_ids, f2i
 
 from mrmime import _mr_mime_cfg, avatar
 from mrmime.cyclicresourceprovider import CyclicResourceProvider
-from mrmime.responses import parse_inventory_delta, parse_player_stats, parse_caught_pokemon
+from mrmime.shadowbans import is_rareless_scan
 from mrmime.utils import jitter_location
 
 log = logging.getLogger(__name__)
@@ -20,12 +24,15 @@ login_lock = Lock()
 
 
 class POGOAccount(object):
-
     def __init__(self, auth_service, username, password, hash_key=None,
                  hash_key_provider=None, proxy_url=None, proxy_provider=None):
+
         self.auth_service = auth_service
         self.username = username
         self.password = password
+
+        # Get myself a copy of the config
+        self.cfg = _mr_mime_cfg.copy()
 
         # Initialize hash keys
         self._hash_key = None
@@ -47,25 +54,26 @@ class POGOAccount(object):
         else:
             self._proxy_provider = None
 
-        self.cfg = _mr_mime_cfg.copy()
-
-        # Tutorial state and warn/ban flags
-        self.player_state = {}
-
-        # Trainer statistics
-        self.player_stats = {}
-
+        # Captcha
         self.captcha_url = None
 
         # Inventory information
+        self.inbox = {}
         self.inventory = None
         self.inventory_balls = 0
         self.inventory_total = 0
+        self.incubators = []
+        self.pokemon = {}
+        self.eggs = []
 
-        # Location
+        # Current location
         self.latitude = None
         self.longitude = None
         self.altitude = None
+
+        # Count number of rareless scans (to detect shadowbans)
+        self.rareless_scans = 0
+        self.shadowbanned = False
 
         # Last log message (for GUI/console)
         self.last_msg = ""
@@ -76,6 +84,9 @@ class POGOAccount(object):
         self._download_settings_hash = None
         self._asset_time = 0
         self._item_templates_time = 0
+
+        # Will be set to true if a request returns a BAD_REQUEST response which equals a ban
+        self._bad_request_ban = False
 
         # Timestamp when last API request was made
         self._last_request = 0
@@ -88,6 +99,15 @@ class POGOAccount(object):
 
         # Timestamp when previous user action is completed
         self._last_action = 0
+
+        # Tutorial state and warn/ban flags
+        self._player_state = {}
+
+        # Trainer statistics
+        self._player_stats = None
+
+        # PGPool
+        self._last_pgpool_update = 0
 
     @property
     def hash_key(self):
@@ -214,7 +234,6 @@ class POGOAccount(object):
                     return self._initial_login_request_flow()
                 except BannedAccountException:
                     self.log_warning("Account most probably BANNED! :-(((")
-                    self.player_state['banned'] = True
                     return False
                 except CaptchaException:
                     self.log_warning("Account got CAPTCHA'd! :-|")
@@ -227,7 +246,6 @@ class POGOAccount(object):
             if not self.cfg['parallel_logins']:
                 login_lock.release()
 
-
     def is_logged_in(self):
         # Logged in? Enough time left? Cool!
         if self._api.get_auth_provider() and self._api.get_auth_provider().has_ticket():
@@ -236,10 +254,10 @@ class POGOAccount(object):
         return False
 
     def is_warned(self):
-        return self.player_state.get('warn')
+        return self._player_state.get('warn')
 
     def is_banned(self):
-        return self.player_state.get('banned')
+        return self._bad_request_ban or self._player_state.get('banned')
 
     def has_captcha(self):
         return None if not self.is_logged_in() else (
@@ -247,6 +265,61 @@ class POGOAccount(object):
 
     def uses_proxy(self):
         return self._proxy_url is not None and len(self._proxy_url) > 0
+
+    def get_stats(self, attr, default=None):
+        return getattr(self._player_stats, attr, default) if self._player_stats else default
+
+    def get_state(self, key, default=None):
+        return self._player_state.get(key, default)
+
+    def needs_pgpool_update(self):
+        has_data = self.is_banned() or (self.inventory and self._player_stats and self._player_state)
+        return self.cfg['pgpool_auto_update'] and has_data and (
+            time.time() - self._last_pgpool_update >= self.cfg['pgpool_update_interval'])
+
+    def update_pgpool(self):
+        data = [{
+            'username': self.username,
+            'password': self.password,
+            'auth_service': self.auth_service,
+            'email': self.inbox.get('EMAIL'),
+            'system_id': self.cfg['pgpool_system_id'],
+            'latitude': self.latitude,
+            'longitude': self.longitude,
+            'level': self.get_stats('level'),
+            'xp': self.get_stats('experience'),
+            'encounters': self.get_stats('pokemons_encountered'),
+            'balls_thrown': self.get_stats('pokeballs_thrown'),
+            'captures': self.get_stats('pokemons_captured'),
+            'spins': self.get_stats('poke_stop_visits'),
+            'walked': self.get_stats('km_walked'),
+            'team': self.inbox.get('TEAM'),
+            'coins': self.inbox.get('POKECOIN_BALANCE'),
+            'stardust': self.inbox.get('STARDUST_BALANCE'),
+            'warn': self.is_warned(),
+            'banned': self.is_banned(),
+            'ban_flag': self.get_state('banned'),
+            'shadowbanned': self.shadowbanned,
+            #'tutorial_state': data.get('tutorial_state'),
+            'captcha': self.has_captcha(),
+            'rareless_scans': self.rareless_scans,
+            'balls': self.inventory_balls,
+            'total_items': self.inventory_total,
+            'pokemon': len(self.pokemon),
+            'eggs': len(self.eggs),
+            'incubators': len(self.incubators)
+            #'awarded_to_level': data.get('awarded_to_level')
+        }]
+        try:
+            url = '{}/account/update'.format(self.cfg['pgpool_url'])
+            r = requests.post(url, data=json.dumps(data))
+            if r.status_code == 200:
+                self.log_info("Successfully updated PGPool account details")
+            else:
+                self.log_warning("Got status code {} from PGPool while updating account details".format(r.status_code))
+        except:
+            self.log_debug("Could not update PGPool account details")
+        self._last_pgpool_update = time.time()
 
     def req_get_map_objects(self):
         """Scans current account location."""
@@ -267,7 +340,7 @@ class POGOAccount(object):
                                             since_timestamp_ms=timestamps,
                                             cell_id=cell_ids),
             get_inbox=True,
-            jitter=False # we already jittered
+            jitter=False  # we already jittered
         )
         self._last_gmo = self._last_request
 
@@ -283,19 +356,30 @@ class POGOAccount(object):
     def req_catch_pokemon(self, encounter_id, spawn_point_id, ball,
                           normalized_reticle_size, spin_modifier):
         response = self.perform_request(lambda req: req.catch_pokemon(
-                encounter_id=encounter_id,
-                pokeball=ball,
-                normalized_reticle_size=normalized_reticle_size,
-                spawn_point_id=spawn_point_id,
-                hit_pokemon=1,
-                spin_modifier=spin_modifier,
-                normalized_hit_position=1.0), action=6)
-        self.last_caught_pokemon = parse_caught_pokemon(response)
+            encounter_id=encounter_id,
+            pokeball=ball,
+            normalized_reticle_size=normalized_reticle_size,
+            spawn_point_id=spawn_point_id,
+            hit_pokemon=1,
+            spin_modifier=spin_modifier,
+            normalized_hit_position=1.0), action=6)
+
+        if ('CATCH_POKEMON' in response):
+            catch_pokemon = response['CATCH_POKEMON']
+            catch_status = catch_pokemon.status
+            capture_id = catch_pokemon.captured_pokemon_id
+
+            # Determine caught Pokemon from inventory
+            self.last_caught_pokemon = None
+            if catch_status == 1:
+                if capture_id in self.pokemon:
+                    self.last_caught_pokemon = self.pokemon[capture_id]
+
         return response
 
-    def req_release_pokemon(self, pokemon_id):
+    def req_release_pokemon(self, pokemon_id, pokemon_ids=None):
         return self.perform_request(
-            lambda req: req.release_pokemon(pokemon_id=pokemon_id))
+            lambda req: req.release_pokemon(pokemon_id=pokemon_id, pokemon_ids=pokemon_ids))
 
     def req_fort_details(self, fort_id, fort_lat, fort_lng):
         return self.perform_request(lambda req: req.fort_details(fort_id=fort_id,
@@ -314,7 +398,7 @@ class POGOAccount(object):
     def seq_spin_pokestop(self, fort_id, fort_lat, fort_lng, player_lat,
                           player_lng):
         self.req_fort_details(fort_id, fort_lat, fort_lng)
-#        name = responses['FORT_DETAILS'].name
+        #        name = responses['FORT_DETAILS'].name
         return self.req_fort_search(fort_id, fort_lat, fort_lng, player_lat, player_lng)
 
     def req_gym_get_info(self, gym_id, gym_lat, gym_lng, player_lat, player_lng):
@@ -345,6 +429,12 @@ class POGOAccount(object):
             else:
                 self.log_warning("Failed verifyChallenge")
                 return False
+
+    def req_use_item_egg_incubator(self, incubator_id, egg_id):
+        return self.perform_request(
+            lambda req: req.use_item_egg_incubator(
+                item_id=incubator_id,
+                pokemon_id=egg_id))
 
     # =======================================================================
 
@@ -399,8 +489,9 @@ class POGOAccount(object):
             ios_pool = ios8 + ios9 + ios10
         device_info['firmware_type'] = ios_pool[pick_hash % len(ios_pool)]
 
-        self.log_info("Using an {} on iOS {} with device ID {}".format(device,
-            device_info['firmware_type'], device_info['device_id']))
+        self.log_debug("Using an {} on iOS {} with device ID {}".format(device,
+                                                                        device_info['firmware_type'],
+                                                                        device_info['device_id']))
 
         return device_info
 
@@ -419,16 +510,22 @@ class POGOAccount(object):
             self._api.set_position(lat, lng, self.altitude)
 
         success = False
+        response = {}
         while not success:
             try:
                 # Set hash key for this request
+                if not self._hash_key_provider:
+                    msg = "No hash key configured!"
+                    self.log_error(msg)
+                    raise NoHashKeyException()
+
                 old_hash_key = self._hash_key
                 self._hash_key = self._hash_key_provider.next()
                 if self._hash_key != old_hash_key:
                     self.log_debug("Using hash key {}".format(self._hash_key))
                 self._api.activate_hash_server(self._hash_key)
 
-                response = request.call()
+                response = request.call(use_dict=False)
                 self._last_request = time.time()
                 success = True
             except HashingQuotaExceededException as e:
@@ -444,10 +541,19 @@ class POGOAccount(object):
                 else:
                     raise
 
+        if not 'envelope' in response:
+            self.log_warning('No response envelope. Something is wrong!')
+            raise PgoapiError
+
         # status_code 3 means BAD_REQUEST, so probably banned
-        if 'status_code' in response and response['status_code'] == 3:
+        status_code = response['envelope'].status_code
+        if status_code == 3:
             self.log_warning("Got BAD_REQUEST response.")
+            self._bad_request_ban = True
             raise BannedAccountException
+
+        # Clean up
+        del response['envelope']
 
         if not 'responses' in response:
             self.log_error("Got no responses at all!")
@@ -461,6 +567,9 @@ class POGOAccount(object):
         responses = response['responses']
 
         self._parse_responses(responses)
+
+        if self.needs_pgpool_update():
+            self.update_pgpool()
 
         return responses
 
@@ -483,7 +592,12 @@ class POGOAccount(object):
     def _parse_responses(self, responses):
         for response_type in responses.keys():
             response = responses[response_type]
-            if response_type == 'GET_INVENTORY':
+
+            if response_type == 'GET_INBOX':
+                self._parse_inbox_response(response)
+                del responses[response_type]
+
+            elif response_type == 'GET_INVENTORY':
                 api_inventory = response
 
                 # Set an (empty) inventory if necessary
@@ -491,38 +605,113 @@ class POGOAccount(object):
                     self.inventory = {}
 
                 # Update inventory (balls, items)
-                inventory_delta = parse_inventory_delta(api_inventory)
-                self.inventory.update(inventory_delta)
+                self._parse_inventory_delta(api_inventory)
                 self._update_inventory_totals()
 
-                # Update stats (level, xp, encounters, captures, km walked, etc.)
-                self.player_stats.update(parse_player_stats(api_inventory))
-
                 # Update last timestamp for inventory requests
-                self._last_timestamp_ms = api_inventory[
-                    'inventory_delta'].get('new_timestamp_ms', 0)
+                self._last_timestamp_ms = api_inventory.inventory_delta.new_timestamp_ms
+
+                # Clean up
+                del responses[response_type]
 
             # Get settings hash from response for future calls
             elif response_type == 'DOWNLOAD_SETTINGS':
-                if 'hash' in response:
-                    self._download_settings_hash = response['hash']
+                if response.hash:
+                    self._download_settings_hash = response.hash
                 # TODO: Check forced client version and exit program if different
 
+                # Clean up
+                del responses[response_type]
+
             elif response_type == 'GET_PLAYER':
-                self.player_state = {
-                    'tutorial_state': response.get('player_data', {}).get('tutorial_state', []),
-                    'warn': response.get('warn', False),
-                    'banned': response.get('banned', False)
+                self._player_state = {
+                    'tutorial_state': response.player_data.tutorial_state,
+                    'buddy': response.player_data.buddy_pokemon.id,
+                    'warn': response.warn,
+                    'banned': response.banned
                 }
-                if self.player_state.get('banned', False):
+
+                # Clean up
+                del responses[response_type]
+
+                if self._player_state['banned']:
                     self.log_warning("GET_PLAYER has the 'banned' flag set.")
                     raise BannedAccountException
 
             # Check for captcha
             elif response_type == 'CHECK_CHALLENGE':
-                self.captcha_url = response.get('challenge_url')
+                self.captcha_url = response.challenge_url
+
+                # Clean up
+                del responses[response_type]
+
                 if self.has_captcha() and self.cfg['exception_on_captcha']:
                     raise CaptchaException
+
+            elif response_type == 'GET_MAP_OBJECTS':
+                if is_rareless_scan(response):
+                    self.rareless_scans += 1
+                else:
+                    self.rareless_scans = 0
+
+    def _parse_inbox_response(self, response):
+        vars = response.inbox.builtin_variables
+        for v in vars:
+            if v.name in ('POKECOIN_BALANCE', 'STARDUST_BALANCE'):
+                self.inbox[v.name] = int(v.literal)
+            elif v.name == 'EMAIL':
+                self.inbox[v.name] = v.literal
+            elif v.name == 'TEAM':
+                self.inbox[v.name] = v.key
+
+    def _parse_inventory_delta(self, inventory):
+        for item in inventory.inventory_delta.inventory_items:
+            item_data = item.inventory_item_data
+            if item_data.HasField('player_stats'):
+                self._player_stats = item_data.player_stats
+            elif item_data.HasField('item'):
+                item_id = item_data.item.item_id
+                item_count = item_data.item.count
+                self.inventory[item_id] = item_count
+            elif item_data.HasField('egg_incubators'):
+                incubators = item_data.egg_incubators.egg_incubator
+                for incubator in incubators:
+                    if incubator.pokemon_id == 0:
+                        self.incubators.append({
+                            'id': incubator.id,
+                            'item_id': incubator.item_id,
+                            'uses_remaining': incubator.uses_remaining
+                        })
+            elif item_data.HasField('pokemon_data'):
+                p_data = item_data.pokemon_data
+                p_id = p_data.id
+                if not p_data.is_egg:
+                    self.pokemon[p_id] = {
+                        'pokemon_id': p_data.pokemon_id,
+                        'move_1': p_data.move_1,
+                        'move_2': p_data.move_2,
+                        'individual_attack': p_data.individual_attack,
+                        'individual_defense': p_data.individual_defense,
+                        'individual_stamina': p_data.individual_stamina,
+                        'height': p_data.height_m,
+                        'weight': p_data.weight_kg,
+                        'costume': p_data.pokemon_display.costume,
+                        'form': p_data.pokemon_display.form,
+                        'gender': p_data.pokemon_display.gender,
+                        'shiny': p_data.pokemon_display.shiny,
+                        'cp': p_data.cp,
+                        'cp_multiplier': p_data.cp_multiplier,
+                        'is_bad': p_data.is_bad
+                    }
+                else:
+                    # Incubating egg
+                    if p_data.egg_incubator_id:
+                        continue
+                    # Egg
+                    self.eggs.append({
+                        'id': p_id,
+                        'km_target': p_data.egg_km_walked_target
+                    })
 
     def _initial_login_request_flow(self):
         self.log_info("Performing full login flow requests")
@@ -564,8 +753,8 @@ class POGOAccount(object):
         # TODO: Maybe download translation URLs from assets? Like pogonode?
 
         # Checking tutorial -------------------------------------------------
-        if (self.player_state['tutorial_state'] is not None and
-                not all(x in self.player_state['tutorial_state'] for x in
+        if (self._player_state['tutorial_state'] is not None and
+                not all(x in self._player_state['tutorial_state'] for x in
                         (0, 1, 3, 4, 7))):
             self.log_debug("Login Flow: Completing tutorial")
             self._complete_tutorial()
@@ -581,7 +770,7 @@ class POGOAccount(object):
         self.log_debug("Login Flow: Get levelup rewards")
         # ===== LEVEL_UP_REWARDS
         self.perform_request(
-            lambda req: req.level_up_rewards(level=self.player_stats['level']),
+            lambda req: req.level_up_rewards(level=self._player_stats.level),
             download_settings=True)
 
         # Check store -------------------------------------------------------
@@ -596,7 +785,7 @@ class POGOAccount(object):
         # ===== LIST_AVATAR_CUSTOMIZATIONS
         self.perform_request(lambda req: req.list_avatar_customizations(
             avatar_type=player_avatar['avatar'],
-#            slot=tuple(),
+            # slot=tuple(),
             filters=2), buddy_walked=not tutorial, action=5, get_inbox=False)
         time.sleep(random.uniform(7, 14))
 
@@ -619,7 +808,7 @@ class POGOAccount(object):
             lambda req: req.get_player_profile(), action=1, get_inbox=False)
 
     def _complete_tutorial(self):
-        tutorial_state = self.player_state['tutorial_state']
+        tutorial_state = self._player_state['tutorial_state']
         if 0 not in tutorial_state:
             # legal screen
             self.log_debug("Tutorial #0: Legal screen")
@@ -647,9 +836,11 @@ class POGOAccount(object):
             time.sleep(random.uniform(.7, .9))
             # ===== GET_DOWNLOAD_URLS
             self.perform_request(lambda req: req.get_download_urls(asset_id=
-                ['1a3c2816-65fa-4b97-90eb-0b301c064b7a/1487275569649000',
-                'aa8f7687-a022-4773-b900-3a8c170e9aea/1487275581132582',
-                 'e89109b0-9a54-40fe-8431-12f7826c8194/1487275593635524']), get_inbox=False)
+                                                                   [
+                                                                       '1a3c2816-65fa-4b97-90eb-0b301c064b7a/1487275569649000',
+                                                                       'aa8f7687-a022-4773-b900-3a8c170e9aea/1487275581132582',
+                                                                       'e89109b0-9a54-40fe-8431-12f7826c8194/1487275593635524']),
+                                 get_inbox=False)
 
             time.sleep(random.uniform(7, 10.3))
             starter = random.choice((1, 4, 7))
@@ -723,8 +914,8 @@ class POGOAccount(object):
             raise Exception("Call to download_remote_config_version did not"
                             " return proper response.")
         remote_config = responses['DOWNLOAD_REMOTE_CONFIG_VERSION']
-        return remote_config['asset_digest_timestamp_ms'] / 1000000, \
-               remote_config['item_templates_timestamp_ms'] / 1000
+        return remote_config.asset_digest_timestamp_ms / 1000000, \
+               remote_config.item_templates_timestamp_ms / 1000
 
     def _get_asset_digest(self, asset_time):
         i = random.randint(0, 3)
@@ -749,9 +940,9 @@ class POGOAccount(object):
                 response = responses['GET_ASSET_DIGEST']
             except KeyError:
                 break
-            result = response['result']
-            page_offset = response.get('page_offset')
-            page_timestamp = response['timestamp_ms']
+            result = response.result
+            page_offset = response.page_offset
+            page_timestamp = response.timestamp_ms
         self._asset_time = asset_time
 
     def _download_item_templates(self, template_time):
@@ -775,9 +966,9 @@ class POGOAccount(object):
                 response = responses['DOWNLOAD_ITEM_TEMPLATES']
             except KeyError:
                 break
-            result = response['result']
-            page_offset = response.get('page_offset')
-            page_timestamp = response['timestamp_ms']
+            result = response.result
+            page_offset = response.page_offset
+            page_timestamp = response.timestamp_ms
         self._item_templates_time = template_time
 
     def log_info(self, msg):
