@@ -273,43 +273,53 @@ class POGOAccount(object):
         return self._player_state.get(key, default)
 
     def needs_pgpool_update(self):
-        has_data = self.is_banned() or (self.inventory and self._player_stats and self._player_state)
-        return self.cfg['pgpool_auto_update'] and has_data and (
+        return self.cfg['pgpool_auto_update'] and (
             time.time() - self._last_pgpool_update >= self.cfg['pgpool_update_interval'])
 
     def update_pgpool(self):
-        data = [{
+        data = {
             'username': self.username,
             'password': self.password,
             'auth_service': self.auth_service,
-            'email': self.inbox.get('EMAIL'),
             'system_id': self.cfg['pgpool_system_id'],
             'latitude': self.latitude,
             'longitude': self.longitude,
-            'level': self.get_stats('level'),
-            'xp': self.get_stats('experience'),
-            'encounters': self.get_stats('pokemons_encountered'),
-            'balls_thrown': self.get_stats('pokeballs_thrown'),
-            'captures': self.get_stats('pokemons_captured'),
-            'spins': self.get_stats('poke_stop_visits'),
-            'walked': self.get_stats('km_walked'),
-            'team': self.inbox.get('TEAM'),
-            'coins': self.inbox.get('POKECOIN_BALANCE'),
-            'stardust': self.inbox.get('STARDUST_BALANCE'),
-            'warn': self.is_warned(),
             'banned': self.is_banned(),
-            'ban_flag': self.get_state('banned'),
             'shadowbanned': self.shadowbanned,
-            #'tutorial_state': data.get('tutorial_state'),
             'captcha': self.has_captcha(),
-            'rareless_scans': self.rareless_scans,
-            'balls': self.inventory_balls,
-            'total_items': self.inventory_total,
-            'pokemon': len(self.pokemon),
-            'eggs': len(self.eggs),
-            'incubators': len(self.incubators)
-            #'awarded_to_level': data.get('awarded_to_level')
-        }]
+            'rareless_scans': self.rareless_scans
+        }
+        if self._player_state:
+            data.update({
+                'warn': self.is_warned(),
+                'ban_flag': self.get_state('banned')
+                #'tutorial_state': data.get('tutorial_state'),
+            })
+        if self._player_stats:
+            data.update({
+                'level': self.get_stats('level'),
+                'xp': self.get_stats('experience'),
+                'encounters': self.get_stats('pokemons_encountered'),
+                'balls_thrown': self.get_stats('pokeballs_thrown'),
+                'captures': self.get_stats('pokemons_captured'),
+                'spins': self.get_stats('poke_stop_visits'),
+                'walked': self.get_stats('km_walked')
+            })
+        if self.inventory:
+            data.update({
+                'balls': self.inventory_balls,
+                'total_items': self.inventory_total,
+                'pokemon': len(self.pokemon),
+                'eggs': len(self.eggs),
+                'incubators': len(self.incubators)
+            })
+        if self.inbox:
+            data.update({
+                'email': self.inbox.get('EMAIL'),
+                'team': self.inbox.get('TEAM'),
+                'coins': self.inbox.get('POKECOIN_BALANCE'),
+                'stardust': self.inbox.get('STARDUST_BALANCE')
+            })
         try:
             url = '{}/account/update'.format(self.cfg['pgpool_url'])
             r = requests.post(url, data=json.dumps(data))
