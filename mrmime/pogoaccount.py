@@ -278,7 +278,7 @@ class POGOAccount(object):
         return self._pgpool_auto_update_enabled and (
             time.time() - self._last_pgpool_update >= self.cfg['pgpool_update_interval'])
 
-    def update_pgpool(self, release=False):
+    def update_pgpool(self, release=False, reason=None):
         data = {
             'username': self.username,
             'password': self.password,
@@ -322,6 +322,8 @@ class POGOAccount(object):
                 'coins': self.inbox.get('POKECOIN_BALANCE'),
                 'stardust': self.inbox.get('STARDUST_BALANCE')
             })
+        if release and reason:
+            data['_release_reason'] = reason
         try:
             cmd = 'release' if release else 'update'
             url = '{}/account/{}'.format(self.cfg['pgpool_url'], cmd)
