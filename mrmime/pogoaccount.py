@@ -109,6 +109,8 @@ class POGOAccount(object):
         self._pgpool_auto_update_enabled = mrmime_pgpool_enabled() and self.cfg['pgpool_auto_update']
         self._last_pgpool_update = 0
 
+        self.callback_egg_hatched = None
+
     @property
     def hash_key(self):
         return self._hash_key
@@ -671,6 +673,18 @@ class POGOAccount(object):
                     self.rareless_scans += 1
                 else:
                     self.rareless_scans = 0
+
+            elif response_type == 'GET_HATCHED_EGGS':
+                if self.callback_egg_hatched and response.success and len(response.hatched_pokemon) > 0:
+                    for i in range(0, len(response.pokemon_id)):
+                        hatched_egg = {
+                            'experience_awarded': response.experience_awarded[i],
+                            'candy_awarded': response.candy_awarded[i],
+                            'stardust_awarded': response.stardust_awarded[i],
+                            'egg_km_walked': response.egg_km_walked[i],
+                            'hatched_pokemon': response.hatched_pokemon[i]
+                        }
+                        self.callback_egg_hatched(self, hatched_egg)
 
     def _parse_inbox_response(self, response):
         vars = response.inbox.builtin_variables
