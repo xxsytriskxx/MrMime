@@ -257,7 +257,7 @@ class POGOAccount(object):
         return self._player_state.get('warn')
 
     def is_banned(self):
-        return self._bad_request_ban or self._player_state.get('banned')
+        return self._bad_request_ban or self._player_state.get('banned', False)
 
     def has_captcha(self):
         return None if not self.is_logged_in() else (
@@ -276,12 +276,12 @@ class POGOAccount(object):
         return self.cfg['pgpool_auto_update'] and (
             time.time() - self._last_pgpool_update >= self.cfg['pgpool_update_interval'])
 
-    def update_pgpool(self):
+    def update_pgpool(self, release=False):
         data = {
             'username': self.username,
             'password': self.password,
             'auth_service': self.auth_service,
-            'system_id': self.cfg['pgpool_system_id'],
+            'system_id': None if release else self.cfg['pgpool_system_id'],
             'latitude': self.latitude,
             'longitude': self.longitude,
             'banned': self.is_banned(),
@@ -321,10 +321,11 @@ class POGOAccount(object):
                 'stardust': self.inbox.get('STARDUST_BALANCE')
             })
         try:
-            url = '{}/account/update'.format(self.cfg['pgpool_url'])
+            cmd = 'release' if release else 'update'
+            url = '{}/account/{}'.format(self.cfg['pgpool_url'], cmd)
             r = requests.post(url, data=json.dumps(data))
             if r.status_code == 200:
-                self.log_info("Successfully updated PGPool account details")
+                self.log_info("Successfully {}d PGPool account details".format(cmd))
             else:
                 self.log_warning("Got status code {} from PGPool while updating account details".format(r.status_code))
         except:
