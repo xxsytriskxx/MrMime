@@ -14,7 +14,7 @@ from pgoapi.exceptions import AuthException, PgoapiError, \
 from pgoapi.protos.pogoprotos.inventory.item.item_id_pb2 import *
 from pgoapi.utilities import get_cell_ids, f2i
 
-from mrmime import _mr_mime_cfg, avatar
+from mrmime import _mr_mime_cfg, avatar, mrmime_pgpool_enabled
 from mrmime.cyclicresourceprovider import CyclicResourceProvider
 from mrmime.shadowbans import is_rareless_scan
 from mrmime.utils import jitter_location
@@ -107,6 +107,7 @@ class POGOAccount(object):
         self._player_stats = None
 
         # PGPool
+        self._pgpool_auto_update_enabled = mrmime_pgpool_enabled() and self.cfg['pgpool_auto_update']
         self._last_pgpool_update = 0
 
     @property
@@ -273,7 +274,7 @@ class POGOAccount(object):
         return self._player_state.get(key, default)
 
     def needs_pgpool_update(self):
-        return self.cfg['pgpool_auto_update'] and (
+        return self._pgpool_auto_update_enabled and (
             time.time() - self._last_pgpool_update >= self.cfg['pgpool_update_interval'])
 
     def update_pgpool(self, release=False):
