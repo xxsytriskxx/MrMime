@@ -3,14 +3,13 @@ import json
 import logging
 import random
 import time
-import traceback
 from threading import Lock
 
 import requests
 from pgoapi import PGoApi
 from pgoapi.exceptions import AuthException, PgoapiError, \
-    BannedAccountException, HashingQuotaExceededException, HashingOfflineException, HashingTimeoutException, \
-    NoHashKeyException
+    BannedAccountException, NoHashKeyException, ServerSideRequestThrottlingException, ServerBusyOrOfflineException, \
+    NianticIPBannedException
 from pgoapi.protos.pogoprotos.inventory.item.item_id_pb2 import *
 from pgoapi.utilities import get_cell_ids, f2i
 
@@ -521,9 +520,8 @@ class POGOAccount(object):
             lat, lng = jitter_location(self.latitude, self.longitude)
             self._api.set_position(lat, lng, self.altitude)
 
-        success = False
         response = {}
-        while not success:
+        while True:
             try:
                 # Set hash key for this request
                 if not self._hash_key_provider:
@@ -539,19 +537,27 @@ class POGOAccount(object):
 
                 response = request.call(use_dict=False)
                 self._last_request = time.time()
-                success = True
-            except HashingQuotaExceededException as e:
-                if self.cfg['retry_on_hash_quota_exceeded'] or self.cfg['retry_on_hashing_error']:
-                    self.log_warning("{}: Retrying in 5s.".format(repr(e)))
-                    time.sleep(5)
-                else:
-                    raise
-            except (HashingOfflineException, HashingTimeoutException) as e:
-                if self.cfg['retry_on_hashing_error']:
-                    self.log_warning("{}: Retrying in 5s.".format(repr(e)))
-                    time.sleep(5)
-                else:
-                    raise
+                break
+            except (ServerBusyOrOfflineException, ServerSideRequestThrottlingException) as ex:
+                # Retry unlimited
+                self.log_warning("{}: Retrying in 5s.".format(repr(ex)))
+            except NianticIPBannedException as ex:
+                # Rotate proxy
+                self.log_warning("{}: Retrying in 5s.".format(repr(ex)))
+                if self._proxy_provider:
+                    self.log_warning("Rotating proxy")
+                    new_proxy = self._proxy_provider.next()
+                    proxy_config = {
+                        'http': new_proxy,
+                        'https': new_proxy
+                    }
+                    self._api.set_proxy(proxy_config)
+                    self._api._auth_provider.set_proxy(proxy_config)
+            except PgoapiError as ex:
+                # This is bad.
+                raise
+
+            time.sleep(5)
 
         if not 'envelope' in response:
             self.log_warning('No response envelope. Something is wrong!')
