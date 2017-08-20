@@ -570,7 +570,13 @@ class POGOAccount(object):
         # status_code 3 means BAD_REQUEST, so probably banned
         status_code = response['envelope'].status_code
         if status_code == 3:
-            self.log_warning("Got BAD_REQUEST response.")
+            log_suffix = ''
+            if self.cfg['dump_bad_requests']:
+                with open('BAD_REQUESTS.txt', 'a') as f:
+                    f.write(repr(request._req_method_list))
+                    f.close()
+                log_suffix = ' Dumped request to BAD_REQUESTS.txt.'
+            self.log_warning("Got BAD_REQUEST response.{}".format(log_suffix))
             self._bad_request_ban = True
             raise BannedAccountException
 

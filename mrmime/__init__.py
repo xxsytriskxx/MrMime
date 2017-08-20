@@ -25,6 +25,7 @@ _mr_mime_cfg = {
     'goman_hashing_max_rpm_count': None,    # Artificial remaining RPM for GoMan hashing.
     'parallel_logins': True,            # Parallel logins increases number of requests.
     'exception_on_captcha': True,       # Raise CaptchaException if captcha detected
+    'dump_bad_requests': False,
     # --- account login specific
     'login_retries': 3,                 # Number of login retries
     'login_delay': 6,                   # Delay between login retries
