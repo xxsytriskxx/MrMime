@@ -220,9 +220,9 @@ class POGOAccount(object):
                             password=self.password)
                     self.log_info("Login successful after {} tries.".format(num_tries))
                     break
-                except AuthException:
+                except AuthException as ex:
                     self.log_error(
-                        'Failed to login. Trying again in {} seconds.'.format(
+                        'Failed to login. {} - Trying again in {} seconds.'.format(repr(ex),
                             self.cfg['login_delay']))
                     time.sleep(self.cfg['login_delay'])
 
