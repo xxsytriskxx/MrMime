@@ -5,6 +5,7 @@ import random
 import time
 from threading import Lock
 
+import copy
 import requests
 from pgoapi import PGoApi
 from pgoapi.exceptions import AuthException, PgoapiError, \
@@ -533,6 +534,7 @@ class POGOAccount(object):
             self._api.set_position(lat, lng, self.altitude)
 
         response = {}
+        req_method_list = copy.deepcopy(request._req_method_list)
         while True:
             try:
                 # Set hash key for this request
@@ -581,7 +583,7 @@ class POGOAccount(object):
             log_suffix = ''
             if self.cfg['dump_bad_requests']:
                 with open('BAD_REQUESTS.txt', 'a') as f:
-                    f.write(repr(request._req_method_list))
+                    f.write(repr(req_method_list))
                     f.close()
                 log_suffix = ' Dumped request to BAD_REQUESTS.txt.'
             self.log_warning("Got BAD_REQUEST response.{}".format(log_suffix))
