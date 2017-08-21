@@ -340,8 +340,8 @@ class POGOAccount(object):
                 self.log_info("Successfully {}d PGPool account details".format(cmd))
             else:
                 self.log_warning("Got status code {} from PGPool while updating account details".format(r.status_code))
-        except:
-            self.log_debug("Could not update PGPool account details")
+        except Exception as e:
+            self.log_debug("Could not update PGPool account details: {}".format(repr(e)))
         self._last_pgpool_update = time.time()
 
     def req_get_map_objects(self):
