@@ -71,8 +71,8 @@ class POGOAccount(object):
         self.altitude = None
 
         # Count number of rareless scans (to detect shadowbans)
-        self.rareless_scans = 0
-        self.shadowbanned = False
+        self.rareless_scans = None
+        self.shadowbanned = None
 
         # Last log message (for GUI/console)
         self.last_msg = ""
@@ -285,15 +285,23 @@ class POGOAccount(object):
             'auth_service': self.auth_service,
             'system_id': None if release else self.cfg['pgpool_system_id'],
             'latitude': self.latitude,
-            'longitude': self.longitude,
-            'banned': self.is_banned(),
-            'shadowbanned': self.shadowbanned,
-            'captcha': self.has_captcha(),
-            'rareless_scans': self.rareless_scans
+            'longitude': self.longitude
         }
+        # After login we know whether we've got a captcha
+        if self.is_logged_in():
+            data.update({
+                'captcha': self.has_captcha()
+            })
+        if self.rareless_scans is not None:
+            data['rareless_scans'] = self.rareless_scans
+        if self.shadowbanned is not None:
+            data['shadowbanned'] = self.shadowbanned
+        if self._bad_request_ban:
+            data['banned'] = True
         if self._player_state:
             data.update({
                 'warn': self.is_warned(),
+                'banned': self.is_banned(),
                 'ban_flag': self.get_state('banned')
                 #'tutorial_state': data.get('tutorial_state'),
             })
@@ -678,7 +686,10 @@ class POGOAccount(object):
 
             elif response_type == 'GET_MAP_OBJECTS':
                 if is_rareless_scan(response):
-                    self.rareless_scans += 1
+                    if self.rareless_scans is None:
+                        self.rareless_scans = 1
+                    else:
+                        self.rareless_scans += 1
                 else:
                     self.rareless_scans = 0
 
