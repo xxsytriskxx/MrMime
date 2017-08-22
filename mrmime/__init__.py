@@ -47,7 +47,7 @@ _mr_mime_cfg = {
 
 
 def mrmime_pgpool_enabled():
-    return _mr_mime_cfg['pgpool_url'] and _mr_mime_cfg['pgpool_system_id']
+    return bool(_mr_mime_cfg['pgpool_url'] and _mr_mime_cfg['pgpool_system_id'])
 
 
 # ---------------------------------------------------------------------------
