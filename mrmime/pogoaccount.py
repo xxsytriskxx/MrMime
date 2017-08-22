@@ -472,7 +472,7 @@ class POGOAccount(object):
         responses = self.perform_request(lambda req: req.verify_challenge(token=captcha_token), action=4)
         if 'VERIFY_CHALLENGE' in responses:
             response = responses['VERIFY_CHALLENGE']
-            if 'success' in response:
+            if response.HasField('success'):
                 self.captcha_url = None
                 self.log_info("Successfully uncaptcha'd.")
                 return True
