@@ -1026,19 +1026,19 @@ class POGOAccount(object):
 
     def log_info(self, msg):
         self.last_msg = msg
-        log.info("[{}] {}".format(self.username, msg))
+        log.info(u"[{}] {}".format(self.username, msg))
 
     def log_debug(self, msg):
         self.last_msg = msg
-        log.debug("[{}] {}".format(self.username, msg))
+        log.debug(u"[{}] {}".format(self.username, msg))
 
     def log_warning(self, msg):
         self.last_msg = msg
-        log.warning("[{}] {}".format(self.username, msg))
+        log.warning(u"[{}] {}".format(self.username, msg))
 
     def log_error(self, msg):
         self.last_msg = msg
-        log.error("[{}] {}".format(self.username, msg))
+        log.error(u"[{}] {}".format(self.username, msg))
 
 
 class CaptchaException(PgoapiError):
