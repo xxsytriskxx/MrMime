@@ -10,7 +10,7 @@ import requests
 from pgoapi import PGoApi
 from pgoapi.exceptions import AuthException, PgoapiError, \
     BannedAccountException, NoHashKeyException, ServerSideRequestThrottlingException, ServerBusyOrOfflineException, \
-    NianticIPBannedException
+    NianticIPBannedException, BadHashRequestException
 from pgoapi.protos.pogoprotos.inventory.item.item_id_pb2 import *
 from pgoapi.utilities import get_cell_ids, f2i
 
@@ -248,6 +248,32 @@ class POGOAccount(object):
         finally:
             if not self.cfg['parallel_logins']:
                 login_lock.release()
+
+    def rotate_proxy(self):
+        if self._proxy_provider:
+            old_proxy = self._proxy_url
+            self._proxy_url = self._proxy_provider.next()
+            if self._proxy_url != old_proxy:
+                self.log_info("Rotating proxy. Old: {}  New: {}".format(old_proxy, self._proxy_url))
+                proxy_config = {
+                    'http': self._proxy_url,
+                    'https': self._proxy_url
+                }
+                self._api.set_proxy(proxy_config)
+                self._api._auth_provider.set_proxy(proxy_config)
+
+    def rotate_hash_key(self):
+        # Set hash key for this request
+        if not self._hash_key_provider:
+            msg = "No hash key configured!"
+            self.log_error(msg)
+            raise NoHashKeyException()
+
+        old_hash_key = self._hash_key
+        self._hash_key = self._hash_key_provider.next()
+        if self._hash_key != old_hash_key:
+            self.log_debug("Using hash key {}".format(self._hash_key))
+        self._api.activate_hash_server(self._hash_key)
 
     def is_logged_in(self):
         # Logged in? Enough time left? Cool!
@@ -533,40 +559,28 @@ class POGOAccount(object):
             lat, lng = jitter_location(self.latitude, self.longitude)
             self._api.set_position(lat, lng, self.altitude)
 
-        response = {}
         req_method_list = copy.deepcopy(request._req_method_list)
+
+        response = {}
+        rotate_proxy = False
         while True:
             try:
-                # Set hash key for this request
-                if not self._hash_key_provider:
-                    msg = "No hash key configured!"
-                    self.log_error(msg)
-                    raise NoHashKeyException()
-
-                old_hash_key = self._hash_key
-                self._hash_key = self._hash_key_provider.next()
-                if self._hash_key != old_hash_key:
-                    self.log_debug("Using hash key {}".format(self._hash_key))
-                self._api.activate_hash_server(self._hash_key)
+                self.rotate_hash_key()
+                if rotate_proxy:
+                    self.rotate_proxy()
+                    rotate_proxy = False
 
                 response = request.call(use_dict=False)
+
                 self._last_request = time.time()
                 break
-            except (ServerBusyOrOfflineException, ServerSideRequestThrottlingException) as ex:
-                # Retry unlimited
+            except (ServerBusyOrOfflineException, ServerSideRequestThrottlingException, BadHashRequestException ) as ex:
+                # Retry unlimited - because it might be better to fail
                 self.log_warning("{}: Retrying in 5s.".format(repr(ex)))
             except NianticIPBannedException as ex:
                 # Rotate proxy
                 self.log_warning("{}: Retrying in 5s.".format(repr(ex)))
-                if self._proxy_provider:
-                    self.log_warning("Rotating proxy")
-                    new_proxy = self._proxy_provider.next()
-                    proxy_config = {
-                        'http': new_proxy,
-                        'https': new_proxy
-                    }
-                    self._api.set_proxy(proxy_config)
-                    self._api._auth_provider.set_proxy(proxy_config)
+                rotate_proxy = True
             except PgoapiError as ex:
                 # This is bad.
                 raise
