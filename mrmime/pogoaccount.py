@@ -364,11 +364,11 @@ class POGOAccount(object):
             url = '{}/account/{}'.format(self.cfg['pgpool_url'], cmd)
             r = requests.post(url, data=json.dumps(data))
             if r.status_code == 200:
-                self.log_info("Successfully {}d PGPool account details".format(cmd))
+                self.log_info("Successfully {}d PGPool account.".format(cmd))
             else:
-                self.log_warning("Got status code {} from PGPool while updating account details".format(r.status_code))
+                self.log_warning("Got status code {} from PGPool while updating account.".format(r.status_code))
         except Exception as e:
-            self.log_debug("Could not update PGPool account details: {}".format(repr(e)))
+            self.log_error("Could not update PGPool account: {}".format(repr(e)))
         self._last_pgpool_update = time.time()
 
     def req_get_map_objects(self):
