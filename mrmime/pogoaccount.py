@@ -823,7 +823,7 @@ class POGOAccount(object):
         if (self._player_state['tutorial_state'] is not None and
                 not all(x in self._player_state['tutorial_state'] for x in
                         (0, 1, 3, 4, 7))):
-            self.log_debug("Login Flow: Completing tutorial")
+            self.log_info("Completing tutorial")
             self._complete_tutorial()
         else:
             # Get player profile
