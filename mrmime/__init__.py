@@ -3,6 +3,8 @@ import json
 import logging
 import os
 
+from pgoapi import PGoApi
+from pgoapi.auth_ptc import AuthPtc
 from pgoapi.hash_server import HashServer
 
 log = logging.getLogger(__name__)
@@ -20,6 +22,7 @@ _mr_mime_cfg = {
         'timezone': 'America/Denver'
     },
     # --- general
+    'goman_proxy_support': False,       # Patch PGoApi to be able to use GoMan proxies.
     'goman_hashing': False,             # Use GoMan hashing instead of Bossland
     'goman_hashing_rate_limit': None,   # Artificial rate limiting for GoMan hashing. Needs goman_hashing to be enabled.
     'goman_hashing_max_rpm_count': None,    # Artificial remaining RPM for GoMan hashing.
@@ -52,8 +55,11 @@ def mrmime_pgpool_enabled():
 
 # ---------------------------------------------------------------------------
 
-# Remember the original __init__ function because it gets replaced when using GoMan hashing with rate limit
+
+# Remember the original __init__ functions because it gets replaced when patching PgoApi for GoMan services
 __HashServer_init = HashServer.__init__
+__PGoApi_init = PGoApi.__init__
+__AuthPtc_init = AuthPtc.__init__
 
 
 # New HashServer init function for GoMan hashing
@@ -65,6 +71,18 @@ def goman_hashing_hashserver_init(self, token):
     # Optionally configure artificial max RPM count
     if _mr_mime_cfg['goman_hashing_max_rpm_count']:
         self.headers['X-MaxRPMCount'] = _mr_mime_cfg['goman_hashing_max_rpm_count']
+
+
+def pgoapi_init_noverify(self, provider=None, oauth2_refresh_token=None, username=None, password=None,
+                         position_lat=None, position_lng=None, position_alt=None, proxy_config=None, device_info=None):
+    __PGoApi_init(self, provider, oauth2_refresh_token, username, password, position_lat, position_lng, position_alt,
+                  proxy_config, device_info)
+    self._session.verify = False
+
+
+def auth_ptc_init_noverify(self, username=None, password=None, user_agent=None, timeout=None, locale=None):
+    __AuthPtc_init(self, username, password, user_agent, timeout, locale)
+    self._session.verify = False
 
 
 def init_mr_mime(user_cfg=None, config_file=DEFAULT_CONFIG_FILE):
@@ -91,11 +109,16 @@ def init_mr_mime(user_cfg=None, config_file=DEFAULT_CONFIG_FILE):
             logging.Formatter('%(asctime)s [%(levelname)8s] %(message)s'))
         logging.getLogger('mrmime').addHandler(file_handler)
 
+    if _mr_mime_cfg['goman_proxy_support']:
+        log.info("Patching PGoApi to support GoMan proxies")
+        PGoApi.__init__ = pgoapi_init_noverify
+        AuthPtc.__init__ = auth_ptc_init_noverify
+
     if _mr_mime_cfg['goman_hashing']:
         # Inject GoMan hashing into pgoapi
         HashServer.__dict__['endpoint'] = GOMAN_HASHING_ENDPOINT
         HashServer.__init__ = goman_hashing_hashserver_init
-        log.info("Using GoMan hashing instead of Bossland hashing.")
+        log.info("Patching PGoApi to use GoMan hashing instead of Bossland hashing.")
         if _mr_mime_cfg['goman_hashing_rate_limit']:
             log.info("Using artificial GoMan hashing rate limit of {} RPM.".format(
                 _mr_mime_cfg['goman_hashing_rate_limit']))
