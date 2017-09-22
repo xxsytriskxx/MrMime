@@ -143,6 +143,21 @@ class POGOAccount(object):
         self.longitude = lng
         self.altitude = alt
 
+    def release(self, reason="No longer in use"):
+        if mrmime_pgpool_enabled():
+            self.update_pgpool(release=True, reason=reason)
+        self._api._session.close()
+        self._api.get_auth_provider()._session.close()
+        del self._api
+        # Maybe delete more stuff too?
+        # del self._player_state
+        # del self._player_stats
+        # del self.inventory
+        # del self.incubators
+        # del self.pokemon
+        # del self.eggs
+
+
     def perform_request(self, add_main_request, download_settings=False,
                         buddy_walked=True, get_inbox=True, action=None, jitter=True):
         request = self._api.create_request()
