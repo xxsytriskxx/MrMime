@@ -197,8 +197,11 @@ class POGOAccount(object):
     # Use API to check the login status, and retry the login if possible.
     def check_login(self):
         # Check auth ticket
-        if self._api.get_auth_provider() and self._api.get_auth_provider().check_ticket():
-            return True
+        if self._api._auth_provider and self._api._auth_provider._access_token:
+            remaining_time = self._api._auth_provider._access_token_expiry - time.time()
+            if remaining_time > 60:
+                self.log_debug('Credentials remain valid for another {} seconds.'.format(remaining_time))
+                return True
 
         try:
             if not self.cfg['parallel_logins']:
