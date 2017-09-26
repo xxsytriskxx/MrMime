@@ -7,7 +7,7 @@ from pgoapi.hash_server import HashServer
 log = logging.getLogger(__name__)
 
 BOSSLAND_HASHING_ENDPOINT = HashServer.__dict__['endpoint']
-GOMAN_HASHING_ENDPOINT = 'http://hash.goman.io/api/v137_1/hash'
+GOMAN_HASHING_ENDPOINT = 'http://hash.goman.io/api/v143_1/hash'
 
 goman_rate_limit = None
 goman_max_rpm_count = None
