@@ -10,7 +10,7 @@ import requests
 from pgoapi import PGoApi
 from pgoapi.exceptions import AuthException, PgoapiError, \
     BannedAccountException, NoHashKeyException, ServerSideRequestThrottlingException, ServerBusyOrOfflineException, \
-    NianticIPBannedException, BadHashRequestException
+    NianticIPBannedException, BadHashRequestException, UnexpectedHashResponseException
 from pgoapi.protos.pogoprotos.inventory.item.item_id_pb2 import *
 from pgoapi.utilities import get_cell_ids, f2i
 
@@ -592,8 +592,9 @@ class POGOAccount(object):
 
                 self._last_request = time.time()
                 break
-            except (ServerBusyOrOfflineException, ServerSideRequestThrottlingException, BadHashRequestException ) as ex:
-                # Retry unlimited - because it might be better to fail
+            except (ServerBusyOrOfflineException, ServerSideRequestThrottlingException, BadHashRequestException,
+                    UnexpectedHashResponseException) as ex:
+                # Retry unlimited - most probably just a temporary error
                 self.log_warning("{}: Retrying in 5s.".format(repr(ex)))
             except NianticIPBannedException as ex:
                 # Rotate proxy
