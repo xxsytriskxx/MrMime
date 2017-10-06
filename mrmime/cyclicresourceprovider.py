@@ -14,8 +14,11 @@ class CyclicResourceProvider(object):
             for resource in attr:
                 self.add_resource(resource)
 
+    def len(self):
+        return len(self.resources)
+
     def is_empty(self):
-        return len(self.resources) == 0
+        return self.len() == 0
 
     def add_resource(self, resource):
         self.resources.append(resource)
