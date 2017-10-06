@@ -607,7 +607,7 @@ class POGOAccount(object):
                 else:
                     # Shorten retry delay according to number of available hash keys
                     retryDelay = defaultRetryDelay / self._hash_key_provider.len()
-                self.log_warning("{}: Retrying in {:.1}s.".format(repr(ex), retryDelay))
+                self.log_warning("{}: Retrying in {:.1f}s.".format(repr(ex), retryDelay))
                 time.sleep(retryDelay)
             except Exception as ex:
                 # No PgoapiError - this is serious!
