@@ -10,14 +10,14 @@ import requests
 from pgoapi import PGoApi
 from pgoapi.exceptions import AuthException, PgoapiError, \
     BannedAccountException, NoHashKeyException, ServerSideRequestThrottlingException, ServerBusyOrOfflineException, \
-    NianticIPBannedException, BadHashRequestException, UnexpectedHashResponseException
+    NianticIPBannedException, BadHashRequestException, UnexpectedHashResponseException, HashingQuotaExceededException
 from pgoapi.protos.pogoprotos.inventory.item.item_id_pb2 import *
 from pgoapi.utilities import get_cell_ids, f2i
 
 from mrmime import _mr_mime_cfg, avatar, mrmime_pgpool_enabled
 from mrmime.cyclicresourceprovider import CyclicResourceProvider
 from mrmime.shadowbans import is_rareless_scan
-from mrmime.utils import jitter_location
+from mrmime.utils import jitter_location, exception_caused_by_proxy_error
 
 log = logging.getLogger(__name__)
 login_lock = Lock()
@@ -592,23 +592,32 @@ class POGOAccount(object):
 
                 self._last_request = time.time()
                 break
-            except (ServerBusyOrOfflineException, ServerSideRequestThrottlingException, BadHashRequestException,
-                    UnexpectedHashResponseException) as ex:
-                # Retry unlimited - most probably just a temporary error
-                self.log_warning("{}: Retrying in 5s.".format(repr(ex)))
             except NianticIPBannedException as ex:
-                # Rotate proxy
-                self.log_warning("{}: Retrying in 5s.".format(repr(ex)))
-                rotate_proxy = True
+                if not self.uses_proxy():
+                    # IP banned and not using proxies... we should quit
+                    self.log_error(repr(ex))
+                    sys.exit(ex)
             except PgoapiError as ex:
-                # This is bad.
+                defaultRetryDelay = float(self.cfg['request_retry_delay'])
+                # Rotate proxy if it's part of the error
+                if self.uses_proxy() and exception_caused_by_proxy_error(ex):
+                    rotate_proxy = True
+                    # Shorten retry delay according to number of available proxies
+                    retryDelay = defaultRetryDelay / self._proxy_provider.len()
+                else:
+                    # Shorten retry delay according to number of available hash keys
+                    retryDelay = defaultRetryDelay / self._hash_key_provider.len()
+                self.log_warning("{}: Retrying in {:.1f}s.".format(repr(ex), retryDelay))
+                time.sleep(retryDelay)
+            except Exception as ex:
+                # No PgoapiError - this is serious!
                 raise
 
-            time.sleep(5)
 
         if not 'envelope' in response:
-            self.log_warning('No response envelope. Something is wrong!')
-            raise PgoapiError
+            msg = 'No response envelope. Something is wrong!'
+            self.log_warning(msg)
+            raise PgoapiError(msg)
 
         # status_code 3 means BAD_REQUEST, so probably banned
         status_code = response['envelope'].status_code
