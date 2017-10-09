@@ -10,7 +10,8 @@ import requests
 from pgoapi import PGoApi
 from pgoapi.exceptions import AuthException, PgoapiError, \
     BannedAccountException, NoHashKeyException, ServerSideRequestThrottlingException, ServerBusyOrOfflineException, \
-    NianticIPBannedException, BadHashRequestException, UnexpectedHashResponseException, HashingQuotaExceededException
+    NianticIPBannedException, BadHashRequestException, UnexpectedHashResponseException, HashingQuotaExceededException, \
+    NotLoggedInException
 from pgoapi.protos.pogoprotos.inventory.item.item_id_pb2 import *
 from pgoapi.utilities import get_cell_ids, f2i
 
@@ -609,6 +610,8 @@ class POGOAccount(object):
                     retryDelay = defaultRetryDelay / self._hash_key_provider.len()
                 self.log_warning("{}: Retrying in {:.1f}s.".format(repr(ex), retryDelay))
                 time.sleep(retryDelay)
+                if isinstance(ex, NotLoggedInException):
+                    self.check_login()
             except Exception as ex:
                 # No PgoapiError - this is serious!
                 raise
