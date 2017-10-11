@@ -158,42 +158,54 @@ class POGOAccount(object):
         # del self.pokemon
         # del self.eggs
 
-
     def perform_request(self, add_main_request, download_settings=False,
                         buddy_walked=True, get_inbox=True, action=None, jitter=True):
-        request = self._api.create_request()
+        failures = 0
+        while True:
+            try:
+                request = self._api.create_request()
 
-        # Add main request
-        add_main_request(request)
+                # Add main request
+                add_main_request(request)
 
-        # Standard requests with every call
-        request.check_challenge()
-        request.get_hatched_eggs()
+                # Standard requests with every call
+                request.check_challenge()
+                request.get_hatched_eggs()
 
-        # Check inventory with correct timestamp
-        if self._last_timestamp_ms:
-            request.get_inventory(last_timestamp_ms=self._last_timestamp_ms)
-        else:
-            request.get_inventory()
+                # Check inventory with correct timestamp
+                if self._last_timestamp_ms:
+                    request.get_inventory(last_timestamp_ms=self._last_timestamp_ms)
+                else:
+                    request.get_inventory()
 
-        # Always check awarded badges
-        request.check_awarded_badges()
+                # Always check awarded badges
+                request.check_awarded_badges()
 
-        # Optional: download settings (with correct hash value)
-        if download_settings:
-            if self._download_settings_hash:
-                request.download_settings(hash=self._download_settings_hash)
-            else:
-                request.download_settings()
+                # Optional: download settings (with correct hash value)
+                if download_settings:
+                    if self._download_settings_hash:
+                        request.download_settings(hash=self._download_settings_hash)
+                    else:
+                        request.download_settings()
 
-        # Optional: request buddy kilometers
-        if buddy_walked:
-            request.get_buddy_walked()
+                # Optional: request buddy kilometers
+                if buddy_walked:
+                    request.get_buddy_walked()
 
-        if get_inbox:
-            request.get_inbox(is_history=True)
+                if get_inbox:
+                    request.get_inbox(is_history=True)
 
-        return self._call_request(request, action, jitter)
+                return self._call_request(request, action, jitter)
+            except NotLoggedInException as e:
+                failures += 1
+                if failures < 3:
+                    self.log_warning("{}: Trying to reset API".format(repr(e)))
+                    time.sleep(3)
+                    self._reset_api()
+                    time.sleep(1)
+                else:
+                    self.log_error("Failed {} times to reset API and repeat request. Giving up.".format(failures))
+                    raise
 
     # Use API to check the login status, and retry the login if possible.
     def check_login(self):
@@ -598,6 +610,9 @@ class POGOAccount(object):
                     # IP banned and not using proxies... we should quit
                     self.log_error(repr(ex))
                     sys.exit(ex)
+            except NotLoggedInException:
+                # We need to re-login and re-post the request but we do it one level up
+                raise
             except PgoapiError as ex:
                 defaultRetryDelay = float(self.cfg['request_retry_delay'])
                 # Rotate proxy if it's part of the error
@@ -610,12 +625,9 @@ class POGOAccount(object):
                     retryDelay = defaultRetryDelay / self._hash_key_provider.len()
                 self.log_warning("{}: Retrying in {:.1f}s.".format(repr(ex), retryDelay))
                 time.sleep(retryDelay)
-                if isinstance(ex, NotLoggedInException):
-                    self.check_login()
             except Exception as ex:
                 # No PgoapiError - this is serious!
                 raise
-
 
         if not 'envelope' in response:
             msg = 'No response envelope. Something is wrong!'
