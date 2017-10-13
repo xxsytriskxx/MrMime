@@ -8,6 +8,7 @@ from threading import Lock
 import copy
 import requests
 from pgoapi import PGoApi
+from pgoapi.auth_ptc import AuthPtc
 from pgoapi.exceptions import AuthException, PgoapiError, \
     BannedAccountException, NoHashKeyException, ServerSideRequestThrottlingException, ServerBusyOrOfflineException, \
     NianticIPBannedException, BadHashRequestException, UnexpectedHashResponseException, HashingQuotaExceededException, \
@@ -147,9 +148,15 @@ class POGOAccount(object):
     def release(self, reason="No longer in use"):
         if mrmime_pgpool_enabled():
             self.update_pgpool(release=True, reason=reason)
+
         self._api._session.close()
-        self._api.get_auth_provider()._session.close()
+
+        auth_provider = self._api.get_auth_provider()
+        if isinstance(auth_provider, AuthPtc):
+            auth_provider._session.close()
+
         del self._api
+
         # Maybe delete more stuff too?
         # del self._player_state
         # del self._player_stats
