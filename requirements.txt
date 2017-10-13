@@ -1,2 +1,2 @@
-git+https://github.com/michikrug/pgoapi.git@2a5963a#egg=pgoapi
+git+https://github.com/michikrug/pgoapi.git@8a9c543#egg=pgoapi
 geopy
