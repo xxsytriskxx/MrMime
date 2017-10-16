@@ -1,2 +1,3 @@
 git+https://github.com/michikrug/pgoapi.git@8a9c543#egg=pgoapi
 geopy
+cHaversine
