@@ -82,25 +82,10 @@ class POGOAccount(object):
 
         # --- private fields
 
-        self._api = PGoApi(device_info=self._generate_device_info())
-        self._download_settings_hash = None
-        self._asset_time = 0
-        self._item_templates_time = 0
+        self._reset_api()
 
         # Will be set to true if a request returns a BAD_REQUEST response which equals a ban
         self._bad_request_ban = False
-
-        # Timestamp when last API request was made
-        self._last_request = 0
-
-        # Timestamp of last get_map_objects request
-        self._last_gmo = self._last_request
-
-        # Timestamp for incremental inventory updates
-        self._last_timestamp_ms = None
-
-        # Timestamp when previous user action is completed
-        self._last_action = 0
 
         # Tutorial state and warn/ban flags
         self._player_state = {}
@@ -113,6 +98,24 @@ class POGOAccount(object):
         self._last_pgpool_update = 0
 
         self.callback_egg_hatched = None
+
+    def _reset_api(self):
+        self._api = PGoApi(device_info=self._generate_device_info())
+        self._download_settings_hash = None
+        self._asset_time = 0
+        self._item_templates_time = 0
+
+        # Timestamp when last API request was made
+        self._last_request = 0
+
+        # Timestamp of last get_map_objects request
+        self._last_gmo = self._last_request
+
+        # Timestamp for incremental inventory updates
+        self._last_timestamp_ms = None
+
+        # Timestamp when previous user action is completed
+        self._last_action = 0
 
     @property
     def hash_key(self):
@@ -209,6 +212,8 @@ class POGOAccount(object):
                     self.log_warning("{}: Trying to reset API".format(repr(e)))
                     time.sleep(3)
                     self._reset_api()
+                    self.set_position(self.latitude, self.longitude, self.altitude)
+                    self.check_login()
                     time.sleep(1)
                 else:
                     self.log_error("Failed {} times to reset API and repeat request. Giving up.".format(failures))
