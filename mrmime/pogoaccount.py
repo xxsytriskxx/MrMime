@@ -268,6 +268,9 @@ class POGOAccount(object):
                     self.log_error(
                         'Failed to login. {} - Trying again in {} seconds.'.format(repr(ex),
                             self.cfg['login_delay']))
+                    # Let the exception for the last try bubble up.
+                    if num_tries >= self.cfg['login_retries']:
+                        raise
                     time.sleep(self.cfg['login_delay'])
 
             if num_tries >= self.cfg['login_retries']:
