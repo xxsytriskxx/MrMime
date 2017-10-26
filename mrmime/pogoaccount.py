@@ -320,8 +320,8 @@ class POGOAccount(object):
 
     def is_logged_in(self):
         # Logged in? Enough time left? Cool!
-        if self._api.get_auth_provider() and self._api.get_auth_provider().has_ticket():
-            remaining_time = self._api.get_auth_provider()._ticket_expire / 1000 - time.time()
+        if self._api._auth_provider and self._api._auth_provider._access_token:
+            remaining_time = self._api._auth_provider._access_token_expiry - time.time()
             return remaining_time > 60
         return False
 
