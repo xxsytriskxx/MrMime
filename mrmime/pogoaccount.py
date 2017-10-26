@@ -1,3 +1,4 @@
+import copy
 import hashlib
 import json
 import logging
@@ -655,7 +656,7 @@ class POGOAccount(object):
                     f.write(repr(req_method_list))
                     f.close()
                 log_suffix = ' Dumped request to BAD_REQUESTS.txt.'
-            self.log_warning("Got BAD_REQUEST response.{}".format(log_suffix))
+            self.log_warning("Got BAD_REQUEST response. Possible Ban!{}".format(log_suffix))
             self._bad_request_ban = True
             raise BannedAccountException
 
