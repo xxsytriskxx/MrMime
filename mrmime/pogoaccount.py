@@ -5,14 +5,11 @@ import random
 import time
 from threading import Lock
 
-import copy
 import requests
 from pgoapi import PGoApi
 from pgoapi.auth_ptc import AuthPtc
 from pgoapi.exceptions import AuthException, PgoapiError, \
-    BannedAccountException, NoHashKeyException, ServerSideRequestThrottlingException, ServerBusyOrOfflineException, \
-    NianticIPBannedException, BadHashRequestException, UnexpectedHashResponseException, HashingQuotaExceededException, \
-    NotLoggedInException
+    BannedAccountException, NoHashKeyException, NianticIPBannedException, NotLoggedInException
 from pgoapi.protos.pogoprotos.inventory.item.item_id_pb2 import *
 from pgoapi.utilities import get_cell_ids, f2i
 
