@@ -354,7 +354,7 @@ class POGOAccount(object):
             'username': self.username,
             'password': self.password,
             'auth_service': self.auth_service,
-            'system_id': None if release else self.cfg['pgpool_system_id'],
+            'system_id': self.cfg['pgpool_system_id'],
             'latitude': self.latitude,
             'longitude': self.longitude
         }
