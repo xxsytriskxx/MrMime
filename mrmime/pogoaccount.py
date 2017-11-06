@@ -167,7 +167,7 @@ class POGOAccount(object):
         # del self.eggs
 
     def perform_request(self, add_main_request, download_settings=False,
-                        buddy_walked=True, get_inbox=True, action=None, jitter=True):
+                        buddy_walked=True, get_inbox=True, action=None):
         failures = 0
         while True:
             try:
@@ -203,7 +203,7 @@ class POGOAccount(object):
                 if get_inbox:
                     request.get_inbox(is_history=True)
 
-                return self._call_request(request, action, jitter)
+                return self._call_request(request, action)
             except NotLoggedInException as e:
                 failures += 1
                 if failures < 3:
@@ -422,9 +422,11 @@ class POGOAccount(object):
         if diff > 0:
             time.sleep(diff)
 
-        # We jitter here because we need the jittered location NOW
-        lat, lng = jitter_location(self.latitude, self.longitude)
-        self._api.set_position(lat, lng, self.altitude)
+        # Jitter if wanted
+        if self.cfg['jitter_gmo']:
+            lat, lng = jitter_location(self.latitude, self.longitude)
+        else:
+            lat, lng = self.latitude, self.longitude
 
         cell_ids = get_cell_ids(lat, lng)
         timestamps = [0, ] * len(cell_ids)
@@ -433,8 +435,7 @@ class POGOAccount(object):
                                             longitude=f2i(lng),
                                             since_timestamp_ms=timestamps,
                                             cell_id=cell_ids),
-            get_inbox=True,
-            jitter=False  # we already jittered
+            get_inbox=True
         )
         self._last_gmo = self._last_request
 
@@ -589,7 +590,7 @@ class POGOAccount(object):
 
         return device_info
 
-    def _call_request(self, request, action=None, jitter=True):
+    def _call_request(self, request, action=None):
         # Wait until a previous user action gets completed
         if action:
             now = time.time()
@@ -598,10 +599,6 @@ class POGOAccount(object):
                 time.sleep(self._last_action - now)
             else:
                 time.sleep(0.5)
-
-        if jitter:
-            lat, lng = jitter_location(self.latitude, self.longitude)
-            self._api.set_position(lat, lng, self.altitude)
 
         req_method_list = copy.deepcopy(request._req_method_list)
 

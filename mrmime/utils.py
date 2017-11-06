@@ -1,19 +1,39 @@
 import math
 import random
+import time
 from cHaversine import haversine
 
 import geopy
-import geopy.distance
-import time
 from requests.exceptions import ProxyError, ConnectionError, SSLError
 
 
-def jitter_location(lat, lng, maxMeters=3):
+# Returns destination coords given origin coords, distance (Ms) and bearing.
+# This version is less precise and almost 1 order of magnitude faster than
+# using geopy.
+def fast_get_new_coords(origin, distance, bearing):
+    R = 6371009  # IUGG mean earth radius in kilometers.
+
+    oLat = math.radians(origin[0])
+    oLon = math.radians(origin[1])
+    b = math.radians(bearing)
+
+    Lat = math.asin(
+        math.sin(oLat) * math.cos(distance / R) +
+        math.cos(oLat) * math.sin(distance / R) * math.cos(b))
+
+    Lon = oLon + math.atan2(
+        math.sin(bearing) * math.sin(distance / R) * math.cos(oLat),
+        math.cos(distance / R) - math.sin(oLat) * math.sin(Lat))
+
+    return math.degrees(Lat), math.degrees(Lon)
+
+
+def jitter_location(lat, lng, maxMeters=10):
     origin = geopy.Point(lat, lng)
-    b = random.randint(0, 360)
-    d = math.sqrt(random.random()) * (float(maxMeters) / 1000)
-    destination = geopy.distance.distance(kilometers=d).destination(origin, b)
-    return destination.latitude, destination.longitude
+    bearing = random.randint(0, 360)
+    distance = math.sqrt(random.random()) * (float(maxMeters))
+    destination = fast_get_new_coords(origin, distance, bearing)
+    return destination[0], destination[1]
 
 
 def exception_caused_by_proxy_error(ex):
