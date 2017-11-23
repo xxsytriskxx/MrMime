@@ -61,6 +61,7 @@ class POGOAccount(object):
         self.inbox = {}
         self.inventory = None
         self.inventory_balls = 0
+        self.inventory_lures = 0
         self.inventory_total = 0
         self.incubators = []
         self.pokemon = {}
@@ -393,6 +394,7 @@ class POGOAccount(object):
                 'pokemon': len(self.pokemon),
                 'eggs': len(self.eggs),
                 'incubators': len(self.incubators)
+                # TODO: Send # of lures once PGPool understands them
             })
         if self.inbox:
             data.update({
@@ -693,13 +695,20 @@ class POGOAccount(object):
             ITEM_ULTRA_BALL,
             ITEM_MASTER_BALL
         ]
+        lure_ids = [
+            ITEM_TROY_DISK
+        ]
         balls = 0
+        lures = 0
         total_items = 0
         for item_id in self.inventory:
             if item_id in ball_ids:
                 balls += self.inventory[item_id]
+            if item_id in lure_ids:
+                lures += self.inventory[item_id]
             total_items += self.inventory[item_id]
         self.inventory_balls = balls
+        self.inventory_lures = lures
         self.inventory_total = total_items
 
     def _parse_responses(self, responses):
