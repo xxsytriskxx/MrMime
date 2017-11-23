@@ -496,6 +496,14 @@ class POGOAccount(object):
         #        name = responses['FORT_DETAILS'].name
         return self.req_fort_search(fort_id, fort_lat, fort_lng, player_lat, player_lng)
 
+    def req_add_fort_modifier(self, modifier_id, fort_id, player_lat, player_lng):
+        response = self.perform_request(lambda req: req.add_fort_modifier(
+            modifier_type=modifier_id,
+            fort_id=fort_id,
+            player_latitude=player_lat,
+            player_longitude=player_lng), action=1.2)
+        return response
+
     def req_gym_get_info(self, gym_id, gym_lat, gym_lng, player_lat, player_lng):
         return self.perform_request(
             lambda req: req.gym_get_info(gym_id=gym_id,
