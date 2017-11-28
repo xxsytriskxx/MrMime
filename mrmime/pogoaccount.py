@@ -411,8 +411,11 @@ class POGOAccount(object):
             r = requests.post(url, data=json.dumps(data))
             if r.status_code == 200:
                 self.log_info("Successfully {}d PGPool account.".format(cmd))
+            elif r.status_code == 503:
+                self.log_warning(
+                    "Could not update PGPool account: {} Try increasing 'pgpool_update_interval' in MrMime config.".format(r.content))
             else:
-                self.log_warning("Got status code {} from PGPool while updating account.".format(r.status_code))
+                self.log_warning("Got status {} from PGPool while updating account: {}".format(r.status_code, r.content))
         except Exception as e:
             self.log_error("Could not update PGPool account: {}".format(repr(e)))
         self._last_pgpool_update = time.time()
