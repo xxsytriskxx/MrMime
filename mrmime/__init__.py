@@ -18,8 +18,8 @@ _mr_mime_cfg = {
     },
     # --- general
     'goman_proxy_support': False,       # Patch PGoApi to be able to use GoMan proxies.
-    'goman_hashing_rate_limit': None,   # Artificial rate limiting for GoMan hashing. Needs goman_hashing to be enabled.
-    'goman_hashing_max_rpm_count': None,    # Artificial remaining RPM for GoMan hashing.
+    'goman_hashing_rate_limit': None,   # Artificial rate limiting for GoMan hashing.
+    'goman_hashing_max_rpm_count': None,    # Artificial max RPM for GoMan hashing.
     'parallel_logins': True,            # Parallel logins increases number of requests.
     'exception_on_captcha': True,       # Raise CaptchaException if captcha detected
     'dump_bad_requests': False,         # Requests leading to BAD_REQUEST errors will be dumped to a file
