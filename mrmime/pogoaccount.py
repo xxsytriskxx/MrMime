@@ -495,12 +495,6 @@ class POGOAccount(object):
             player_latitude=player_lat,
             player_longitude=player_lng), action=2)
 
-    def seq_spin_pokestop(self, fort_id, fort_lat, fort_lng, player_lat,
-                          player_lng):
-        self.req_fort_details(fort_id, fort_lat, fort_lng)
-        #        name = responses['FORT_DETAILS'].name
-        return self.req_fort_search(fort_id, fort_lat, fort_lng, player_lat, player_lng)
-
     def req_add_fort_modifier(self, modifier_id, fort_id, player_lat, player_lng):
         response = self.perform_request(lambda req: req.add_fort_modifier(
             modifier_type=modifier_id,
@@ -543,6 +537,12 @@ class POGOAccount(object):
             lambda req: req.use_item_egg_incubator(
                 item_id=incubator_id,
                 pokemon_id=egg_id))
+
+    def seq_spin_pokestop(self, fort_id, fort_lat, fort_lng, player_lat,
+                          player_lng):
+        # We first need to tap the Pokestop before we can spin it, so it's a sequence of actions
+        self.req_fort_details(fort_id, fort_lat, fort_lng)
+        return self.req_fort_search(fort_id, fort_lat, fort_lng, player_lat, player_lng)
 
     # =======================================================================
 
