@@ -393,8 +393,8 @@ class POGOAccount(object):
                 'total_items': self.inventory_total,
                 'pokemon': len(self.pokemon),
                 'eggs': len(self.eggs),
-                'incubators': len(self.incubators)
-                # TODO: Send # of lures once PGPool understands them
+                'incubators': len(self.incubators),
+                'lures': self.inventory_lures
             })
         if self.inbox:
             data.update({
