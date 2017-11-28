@@ -94,7 +94,7 @@ class POGOAccount(object):
 
         # PGPool
         self._pgpool_auto_update_enabled = mrmime_pgpool_enabled() and self.cfg['pgpool_auto_update']
-        self._last_pgpool_update = 0
+        self._last_pgpool_update = time.time()
 
         self.callback_egg_hatched = None
 
