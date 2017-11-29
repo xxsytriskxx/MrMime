@@ -549,7 +549,7 @@ class POGOAccount(object):
     def _generate_device_info(self):
         identifier = self.username + self.password
         md5 = hashlib.md5()
-        md5.update(identifier)
+        md5.update(identifier.encode('utf-8'))
         pick_hash = int(md5.hexdigest(), 16)
 
         iphones = {
