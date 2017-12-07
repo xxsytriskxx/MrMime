@@ -167,8 +167,7 @@ class POGOAccount(object):
         # del self.pokemon
         # del self.eggs
 
-    def perform_request(self, add_main_request, download_settings=False,
-                        buddy_walked=True, get_inbox=True, action=None):
+    def perform_request(self, add_main_request, buddy_walked=True, get_inbox=True, action=None):
         failures = 0
         while True:
             try:
@@ -191,11 +190,10 @@ class POGOAccount(object):
                 request.check_awarded_badges()
 
                 # Optional: download settings (with correct hash value)
-                if download_settings:
-                    if self._download_settings_hash:
-                        request.download_settings(hash=self._download_settings_hash)
-                    else:
-                        request.download_settings()
+                if self._download_settings_hash:
+                    request.download_settings(hash=self._download_settings_hash)
+                else:
+                    request.download_settings()
 
                 # Optional: request buddy kilometers
                 if buddy_walked:
@@ -909,16 +907,13 @@ class POGOAccount(object):
             # Get player profile
             self.log_debug("Login Flow: Get player profile")
             # ===== GET_PLAYER_PROFILE
-            self.perform_request(lambda req: req.get_player_profile(),
-                                 download_settings=True)
+            self.perform_request(lambda req: req.get_player_profile())
             time.sleep(random.uniform(.2, .3))
 
         # Level up rewards --------------------------------------------------
         self.log_debug("Login Flow: Get levelup rewards")
         # ===== LEVEL_UP_REWARDS
-        self.perform_request(
-            lambda req: req.level_up_rewards(level=self._player_stats.level),
-            download_settings=True)
+        self.perform_request(lambda req: req.level_up_rewards(level=self._player_stats.level))
 
         # Check store -------------------------------------------------------
         # TODO: There is currently no way to call the GET_STORE_ITEMS platform request.
@@ -1053,10 +1048,9 @@ class POGOAccount(object):
 
     def _download_remote_config_version(self):
         # ===== DOWNLOAD_REMOTE_CONFIG_VERSION
-        responses = self.perform_request(
-            lambda req: req.download_remote_config_version(platform=1,
-                                                           app_version=PGoApi.get_api_version()),
-            download_settings=True, buddy_walked=False, get_inbox=False)
+        responses = self.perform_request(lambda req: req.download_remote_config_version(platform=1,
+                                                                                        app_version=PGoApi.get_api_version()),
+                                         buddy_walked=False, get_inbox=False)
         if 'DOWNLOAD_REMOTE_CONFIG_VERSION' not in responses:
             raise Exception("Call to download_remote_config_version did not"
                             " return proper response.")
@@ -1076,7 +1070,7 @@ class POGOAccount(object):
                 app_version=PGoApi.get_api_version(),
                 paginate=True,
                 page_offset=page_offset,
-                page_timestamp=page_timestamp), download_settings=True, buddy_walked=False, get_inbox=False)
+                page_timestamp=page_timestamp), buddy_walked=False, get_inbox=False)
             if i > 2:
                 time.sleep(1.45)
                 i = 0
@@ -1102,7 +1096,7 @@ class POGOAccount(object):
             responses = self.perform_request(lambda req: req.download_item_templates(
                 paginate=True,
                 page_offset=page_offset,
-                page_timestamp=page_timestamp), download_settings=True, buddy_walked=False, get_inbox=False)
+                page_timestamp=page_timestamp), buddy_walked=False, get_inbox=False)
             if i > 2:
                 time.sleep(1.5)
                 i = 0
