@@ -177,6 +177,7 @@ class POGOAccount(object):
                 add_main_request(request)
 
                 # Standard requests with every call
+                request.check_challenge()
                 request.get_hatched_eggs()
 
                 # Check inventory with correct timestamp
