@@ -182,9 +182,9 @@ class POGOAccount(object):
 
                 # Check inventory with correct timestamp
                 if self._last_timestamp_ms:
-                    request.get_inventory(last_timestamp_ms=self._last_timestamp_ms)
+                    request.get_holo_inventory(last_timestamp_ms=self._last_timestamp_ms)
                 else:
-                    request.get_inventory()
+                    request.get_holo_inventory()
 
                 # Always check awarded badges
                 request.check_awarded_badges()
@@ -727,7 +727,7 @@ class POGOAccount(object):
                 self._parse_inbox_response(response)
                 del responses[response_type]
 
-            elif response_type == 'GET_INVENTORY':
+            elif response_type == 'GET_HOLO_INVENTORY':
                 api_inventory = response
 
                 # Set an (empty) inventory if necessary
@@ -997,7 +997,7 @@ class POGOAccount(object):
 
             try:
                 inventory = responses[
-                    'GET_INVENTORY'].inventory_delta.inventory_items
+                    'GET_HOLO_INVENTORY'].inventory_delta.inventory_items
                 for item in inventory:
                     pokemon = item.inventory_item_data.pokemon_data
                     if pokemon.id:
