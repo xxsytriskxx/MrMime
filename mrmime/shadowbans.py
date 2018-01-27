@@ -26,6 +26,8 @@ COMMON_POKEMON = [
     194,    # Wooper
     209,    # Snubbull
     218,    # Slugma
+    293,    # Whismur
+    304,    # Aron
     320,    # Wailmer
     325,    # Spoink
     339     # Barboach
